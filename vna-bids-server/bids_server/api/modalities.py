@@ -1,7 +1,10 @@
 """Modalities API - Data type registration."""
+import asyncio
+
 import yaml
 from pathlib import Path
 
+import aiofiles
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,7 +13,7 @@ from bids_server.db.session import get_db
 from bids_server.models.database import ModalityRegistry
 from bids_server.models.schemas import ModalityCreate, ModalityResponse
 
-router = APIRouter(prefix="/bidsweb/v1/modalities", tags=["Modalities"])
+router = APIRouter(prefix="/api/modalities", tags=["Modalities"])
 
 
 @router.get("", response_model=list[ModalityResponse])
@@ -51,11 +54,12 @@ async def register_modality(
 async def load_default_modalities(db: AsyncSession):
     """Load modalities from config file on startup."""
     config_path = Path(__file__).parent.parent.parent / "config" / "modalities.yaml"
-    if not config_path.exists():
+    if not await asyncio.to_thread(config_path.exists):
         return
 
-    with open(config_path) as f:
-        config = yaml.safe_load(f)
+    async with aiofiles.open(config_path) as f:
+        content = await f.read()
+    config = yaml.safe_load(content)
 
     for mod_id, mod_config in config.get("modalities", {}).items():
         existing = await db.execute(

@@ -9,6 +9,7 @@ from urllib.parse import urljoin
 import httpx
 
 from vna_main.config import settings
+from vna_main.services.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 
@@ -47,20 +48,20 @@ class RoutingService:
 
     async def health_check_dicom(self) -> dict[str, Any]:
         try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                resp = await client.get(f"{self.dicom_url}/system", auth=self.dicom_auth())
-                resp.raise_for_status()
-                return {"status": "healthy", "url": self.dicom_url, "info": resp.json()}
+            client = get_http_client()
+            resp = await client.get(f"{self.dicom_url}/system", auth=self.dicom_auth())
+            resp.raise_for_status()
+            return {"status": "healthy", "url": self.dicom_url, "info": resp.json()}
         except (httpx.HTTPError, httpx.TimeoutException, OSError) as e:
             logger.error("DICOM health check failed for %s: %s", self.dicom_url, e, exc_info=True)
             return {"status": "unhealthy", "url": self.dicom_url, "error": str(e)}
 
     async def health_check_bids(self) -> dict[str, Any]:
         try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                resp = await client.get(f"{self.bids_url}/health")
-                resp.raise_for_status()
-                return {"status": "healthy", "url": self.bids_url, "info": resp.json()}
+            client = get_http_client()
+            resp = await client.get(f"{self.bids_url}/health")
+            resp.raise_for_status()
+            return {"status": "healthy", "url": self.bids_url, "info": resp.json()}
         except (httpx.HTTPError, httpx.TimeoutException, OSError) as e:
             logger.error("BIDS health check failed for %s: %s", self.bids_url, e, exc_info=True)
             return {"status": "unhealthy", "url": self.bids_url, "error": str(e)}
@@ -68,20 +69,20 @@ class RoutingService:
     async def proxy_to_dicom(self, path: str, method: str = "GET", **kwargs) -> dict[str, Any]:
         safe_path = _sanitize_path(path)
         url = f"{self.dicom_url}/{safe_path.lstrip('/')}"
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.request(method, url, auth=self.dicom_auth(), **kwargs)
-            resp.raise_for_status()
-            return {"status_code": resp.status_code, "data": resp.json() if resp.content else None}
+        client = get_http_client()
+        resp = await client.request(method, url, auth=self.dicom_auth(), **kwargs)
+        resp.raise_for_status()
+        return {"status_code": resp.status_code, "data": resp.json() if resp.content else None}
 
     async def proxy_to_bids(self, path: str, method: str = "GET", **kwargs) -> dict[str, Any]:
         safe_path = _sanitize_path(path)
         url = f"{self.bids_url}/{safe_path.lstrip('/')}"
         headers = dict(kwargs.pop("headers", {}))
         headers.update(self.bids_auth_headers())
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.request(method, url, headers=headers or None, **kwargs)
-            resp.raise_for_status()
-            return {"status_code": resp.status_code, "data": resp.json() if resp.content else None}
+        client = get_http_client()
+        resp = await client.request(method, url, headers=headers or None, **kwargs)
+        resp.raise_for_status()
+        return {"status_code": resp.status_code, "data": resp.json() if resp.content else None}
 
     async def unified_health(self) -> dict[str, Any]:
         """Check health of all sub-servers."""

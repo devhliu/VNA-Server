@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from vna_main.models.database import get_session
 from vna_main.services.webhook_service import WebhookDelivery, WebhookService
 from vna_main.services.audit_service import AuditService
-from vna_main.api.responses import PaginatedResponse
+from vna_common.responses import PaginatedResponse
 
 router = APIRouter(prefix="/webhooks", tags=["Webhooks"])
 

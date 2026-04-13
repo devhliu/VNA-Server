@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hmac
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
@@ -28,6 +30,6 @@ async def require_bids_api_key(
     if credentials is None or credentials.scheme.lower() != "bearer":
         raise _unauthorized("Missing bearer token")
 
-    if settings.bids_api_key and credentials.credentials != settings.bids_api_key:
+    if settings.bids_api_key and not hmac.compare_digest(credentials.credentials, settings.bids_api_key):
         raise _unauthorized("Invalid API token")
 

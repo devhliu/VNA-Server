@@ -9,7 +9,7 @@ from httpx import AsyncClient
 @pytest.mark.asyncio
 async def test_sync_status_empty(test_client: AsyncClient):
     """GET /v1/sync/status returns empty status when no servers registered."""
-    resp = await test_client.get("/v1/sync/status")
+    resp = await test_client.get("/api/v1/sync/status")
     assert resp.status_code == 200
     data = resp.json()
     assert "dicom" in data
@@ -26,7 +26,7 @@ async def test_receive_sync_event(test_client: AsyncClient):
         "resource_id": "test-res-001",
         "payload": {"source_type": "dicom_only", "data_type": "dicom"},
     }
-    resp = await test_client.post("/v1/sync/event", json=payload)
+    resp = await test_client.post("/api/v1/sync/event", json=payload)
     assert resp.status_code == 200
     data = resp.json()
     assert data["received"] is True
@@ -39,13 +39,13 @@ async def test_receive_sync_event(test_client: AsyncClient):
 async def test_trigger_sync(test_client: AsyncClient):
     """POST /v1/sync/trigger processes pending events."""
     # Create an event first
-    await test_client.post("/v1/sync/event", json={
+    await test_client.post("/api/v1/sync/event", json={
         "source_db": "dicom",
         "event_type": "resource.created",
         "resource_id": "test-res-002",
         "payload": {"source_type": "dicom_only", "data_type": "dicom"},
     })
-    resp = await test_client.post("/v1/sync/trigger?source_db=dicom")
+    resp = await test_client.post("/api/v1/sync/trigger?source_db=dicom")
     assert resp.status_code == 200
     data = resp.json()
     assert data["triggered"] is True
@@ -64,7 +64,7 @@ async def test_internal_sync_dicom(test_client: AsyncClient):
         "patient_id": "PAT001",
         "patient_name": "Test^Patient",
     }
-    resp = await test_client.post("/v1/internal/sync/dicom", json=payload)
+    resp = await test_client.post("/api/v1/internal/sync/dicom", json=payload)
     assert resp.status_code == 200
     data = resp.json()
     assert data["received"] is True
@@ -74,12 +74,12 @@ async def test_internal_sync_dicom(test_client: AsyncClient):
 @pytest.mark.asyncio
 async def test_list_sync_events(test_client: AsyncClient):
     """GET /v1/sync/events lists sync events."""
-    await test_client.post("/v1/sync/event", json={
+    await test_client.post("/api/v1/sync/event", json={
         "source_db": "bids",
         "event_type": "bids_completed",
         "resource_id": "test-res-003",
     })
-    resp = await test_client.get("/v1/sync/events")
+    resp = await test_client.get("/api/v1/sync/events")
     assert resp.status_code == 200
     data = resp.json()
     assert "total" in data

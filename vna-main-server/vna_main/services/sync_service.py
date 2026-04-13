@@ -14,30 +14,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from vna_main.config import settings
 from vna_main.models.database import PatientMapping, ResourceIndex, SyncEvent
 from vna_main.services.routing_service import RoutingService
+from vna_main.services.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
-
-# Shared HTTP client for connection pooling
-_http_client: httpx.AsyncClient | None = None
-
-
-async def get_http_client() -> httpx.AsyncClient:
-    """Get or create shared HTTP client with connection pooling."""
-    global _http_client
-    if _http_client is None:
-        _http_client = httpx.AsyncClient(
-            timeout=30.0,
-            limits=httpx.Limits(max_keepalive_connections=20, max_connections=100),
-        )
-    return _http_client
-
-
-async def close_http_client() -> None:
-    """Close the shared HTTP client."""
-    global _http_client
-    if _http_client is not None:
-        await _http_client.aclose()
-        _http_client = None
 
 
 def _bids_request_headers() -> dict[str, str] | None:
@@ -325,17 +304,17 @@ class SyncService:
         bids_url = settings.BIDS_SERVER_URL
 
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                resp = await client.post(
-                    f"{bids_url}/bidsweb/v1/query",
-                    headers=_bids_request_headers(),
-                    json={"resource_id": bids_resource_id},
-                )
-                if resp.is_success:
-                    bids_data = resp.json()
-                    if isinstance(bids_data, list) and bids_data:
-                        bids_data = bids_data[0]
-                    payload["bids_data"] = bids_data
+            client = await get_http_client()
+            resp = await client.post(
+                f"{bids_url}/api/query",
+                headers=_bids_request_headers(),
+                json={"resource_id": bids_resource_id},
+            )
+            if resp.is_success:
+                bids_data = resp.json()
+                if isinstance(bids_data, list) and bids_data:
+                    bids_data = bids_data[0]
+                payload["bids_data"] = bids_data
         except (httpx.HTTPError, httpx.TimeoutException, OSError) as exc:
             logger.error(
                 "Failed to fetch BIDS resource %s from BIDS server: %s",
@@ -656,7 +635,7 @@ class SyncService:
         try:
             client = await get_http_client()
             resp = await client.post(
-                f"{routing.bids_url}/bidsweb/v1/query",
+                f"{routing.bids_url}/api/query",
                 headers=_bids_request_headers(),
                 json={"limit": 10000},
             )

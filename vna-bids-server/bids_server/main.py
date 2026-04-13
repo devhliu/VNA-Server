@@ -6,8 +6,9 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
 from bids_server.api.deps.auth import require_bids_api_key
@@ -16,11 +17,11 @@ from bids_server.db.session import async_session, engine
 from bids_server.models.database import Base
 from bids_server.services.task_service import task_service
 from bids_server.core.webhook_manager import webhook_manager
-from bids_server.api.middleware.request_id import RequestIDMiddleware
-from bids_server.api.middleware.api_version import APIVersionMiddleware
+from vna_common.middleware.request_id import RequestIDMiddleware
+from vna_common.middleware.api_version import APIVersionMiddleware
 from bids_server.api.middleware.rate_limit import RateLimitMiddleware
-from bids_server.api.middleware.logging import setup_json_logging
-from bids_server.api.responses import ErrorResponse
+from vna_common.middleware.logging import setup_json_logging
+from vna_common.responses import ErrorResponse
 
 logger = logging.getLogger(__name__)
 
@@ -189,7 +190,7 @@ async def health():
     }
 
 
-@app.post("/v1/internal/status", tags=["Health"])
+@app.post("/api/v1/internal/status", tags=["Health"])
 async def internal_status():
     """Internal status endpoint for cross-service health checks."""
     return {
@@ -202,9 +203,12 @@ async def internal_status():
 
 
 @app.exception_handler(Exception)
-async def global_exception_handler(request, exc):
-    logger.exception("Unhandled exception occurred during request")
-    return ErrorResponse(
+async def global_exception_handler(request: Request, exc: Exception):
+    request_id = getattr(request.state, "request_id", "unknown")
+    logger.exception("Unhandled exception occurred during request (request_id=%s)", request_id)
+    body = ErrorResponse(
         error="Internal server error",
-        details={"message": str(exc)}
+        details={"message": f"An internal error occurred. Contact support with request ID: {request_id}"},
+        path=str(request.url.path),
     )
+    return JSONResponse(status_code=500, content=body.model_dump(mode="json"))

@@ -128,7 +128,7 @@ class AsyncBidsClient:
             progress_callback(len(file_content), file_size)
 
         files = {"file": (path.name, file_content)}
-        response = await self._request("POST", "/api/upload", data=data, files=files)
+        response = await self._request("POST", "/api/store", data=data, files=files)
         result = response.json()
         return Resource(**result) if isinstance(result, dict) else Resource(resource_id=str(result))
 
@@ -153,7 +153,7 @@ class AsyncBidsClient:
 
         init_response = await self._request(
             "POST",
-            "/api/upload/chunked/init",
+            "/api/store/init",
             json={
                 "file_name": path.name,
                 "file_size": file_size,
@@ -175,7 +175,7 @@ class AsyncBidsClient:
                 files = {"chunk": (f"chunk_{chunk_index}", chunk_data)}
                 await self._request(
                     "POST",
-                    f"/api/upload/chunked/{upload_id}/chunk",
+                    f"/api/store/{upload_id}",
                     data={"chunk_index": str(chunk_index)},
                     files=files,
                 )
@@ -183,7 +183,7 @@ class AsyncBidsClient:
                 if progress_callback:
                     progress_callback(bytes_uploaded, file_size)
 
-        response = await self._request("POST", f"/api/upload/chunked/{upload_id}/complete")
+        response = await self._request("POST", f"/api/store/{upload_id}/complete")
         result = response.json()
         return Resource(**result) if isinstance(result, dict) else Resource(resource_id=str(result))
 
@@ -198,7 +198,7 @@ class AsyncBidsClient:
         output.parent.mkdir(parents=True, exist_ok=True)
 
         try:
-            async with self._client.stream("GET", f"/api/download/{resource_id}") as response:
+            async with self._client.stream("GET", f"/api/objects/{resource_id}/stream") as response:
                 _raise_for_status(response)
                 total = int(response.headers.get("content-length", 0))
                 written = 0
@@ -235,7 +235,7 @@ class AsyncBidsClient:
 
         try:
             async with self._client.stream(
-                "GET", f"/api/download/{resource_id}", headers=headers
+                "GET", f"/api/objects/{resource_id}/stream", headers=headers
             ) as response:
                 _raise_for_status(response)
                 total = int(response.headers.get("content-length", 0))
@@ -265,7 +265,7 @@ class AsyncBidsClient:
 
         try:
             async with self._client.stream(
-                "POST", "/api/download/batch", json={"resource_ids": resource_ids}
+                "POST", "/api/objects/batch-download", json={"resource_ids": resource_ids}
             ) as response:
                 _raise_for_status(response)
                 total = int(response.headers.get("content-length", 0))
@@ -326,7 +326,7 @@ class AsyncBidsClient:
     # ------------------------------------------------------------------
 
     async def get_labels(self, resource_id: str) -> List[Dict[str, Any]]:
-        response = await self._request("GET", f"/api/resources/{resource_id}/labels")
+        response = await self._request("GET", f"/api/objects/{resource_id}/labels")
         return response.json()
 
     async def set_labels(
@@ -334,7 +334,7 @@ class AsyncBidsClient:
     ) -> List[Dict[str, Any]]:
         response = await self._request(
             "PUT",
-            f"/api/resources/{resource_id}/labels",
+            f"/api/objects/{resource_id}/labels",
             json={"labels": _normalize_label_map(labels)},
         )
         return response.json()
@@ -350,11 +350,11 @@ class AsyncBidsClient:
             body["add"] = _normalize_label_map(add)
         if remove:
             body["remove"] = remove
-        response = await self._request("PATCH", f"/api/resources/{resource_id}/labels", json=body)
+        response = await self._request("PATCH", f"/api/objects/{resource_id}/labels", json=body)
         return response.json()
 
     async def list_all_tags(self) -> List[Dict[str, Any]]:
-        response = await self._request("GET", "/api/tags")
+        response = await self._request("GET", "/api/labels")
         return response.json()
 
     # ------------------------------------------------------------------
@@ -382,7 +382,7 @@ class AsyncBidsClient:
         return Annotation(**response.json())
 
     async def list_annotations(self, resource_id: str) -> List[Annotation]:
-        response = await self._request("GET", f"/api/resources/{resource_id}/annotations")
+        response = await self._request("GET", f"/api/objects/{resource_id}/annotations")
         data = response.json()
         if isinstance(data, list):
             return [Annotation(**a) for a in data]

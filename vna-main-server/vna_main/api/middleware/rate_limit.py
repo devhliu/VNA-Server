@@ -50,7 +50,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
         if path.startswith("/static"):
             return await call_next(request)
-        if path.startswith("/v1/health") or path.startswith("/v1/internal"):
+        if path.startswith("/api/v1/health") or path.startswith("/api/v1/internal"):
             return await call_next(request)
 
         # Use X-Forwarded-For only from trusted proxies, otherwise use client IP

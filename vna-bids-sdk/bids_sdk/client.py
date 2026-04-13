@@ -214,7 +214,7 @@ class BidsClient:
             files = {"file": (path.name, open(path, "rb"))}
 
         try:
-            response = self._request("POST", "/api/upload", data=data, files=files)
+            response = self._request("POST", "/api/store", data=data, files=files)
         finally:
             # Close file handle if we opened it
             if not progress_callback and "file" in files:
@@ -264,7 +264,7 @@ class BidsClient:
         # Initiate chunked upload
         init_response = self._request(
             "POST",
-            "/api/upload/chunked/init",
+            "/api/store/init",
             json={
                 "file_name": path.name,
                 "file_size": file_size,
@@ -286,7 +286,7 @@ class BidsClient:
                 files = {"chunk": (f"chunk_{chunk_index}", chunk_data)}
                 self._request(
                     "POST",
-                    f"/api/upload/chunked/{upload_id}/chunk",
+                    f"/api/store/{upload_id}",
                     data={"chunk_index": str(chunk_index)},
                     files=files,
                 )
@@ -295,7 +295,7 @@ class BidsClient:
                     progress_callback(bytes_uploaded, file_size)
 
         # Finalize
-        response = self._request("POST", f"/api/upload/chunked/{upload_id}/complete")
+        response = self._request("POST", f"/api/store/{upload_id}/complete")
         result = response.json()
         return (
             Resource(**result)
@@ -323,7 +323,7 @@ class BidsClient:
         output.parent.mkdir(parents=True, exist_ok=True)
 
         try:
-            with self._client.stream("GET", f"/api/download/{resource_id}") as response:
+            with self._client.stream("GET", f"/api/objects/{resource_id}/stream") as response:
                 _raise_for_status(response)
                 total = int(response.headers.get("content-length", 0))
                 written = 0
@@ -371,7 +371,7 @@ class BidsClient:
 
         try:
             with self._client.stream(
-                "GET", f"/api/download/{resource_id}", headers=headers
+                "GET", f"/api/objects/{resource_id}/stream", headers=headers
             ) as response:
                 _raise_for_status(response)
                 total = int(response.headers.get("content-length", 0))
@@ -410,7 +410,7 @@ class BidsClient:
 
         try:
             with self._client.stream(
-                "POST", "/api/download/batch", json={"resource_ids": resource_ids}
+                "POST", "/api/objects/batch-download", json={"resource_ids": resource_ids}
             ) as response:
                 _raise_for_status(response)
                 total = int(response.headers.get("content-length", 0))
@@ -497,7 +497,7 @@ class BidsClient:
         Returns:
             List of label dicts.
         """
-        response = self._request("GET", f"/api/resources/{resource_id}/labels")
+        response = self._request("GET", f"/api/objects/{resource_id}/labels")
         return response.json()
 
     def set_labels(
@@ -514,7 +514,7 @@ class BidsClient:
         """
         response = self._request(
             "PUT",
-            f"/api/resources/{resource_id}/labels",
+            f"/api/objects/{resource_id}/labels",
             json={"labels": _normalize_label_map(labels)},
         )
         return response.json()
@@ -541,7 +541,7 @@ class BidsClient:
         if remove:
             body["remove"] = remove
         response = self._request(
-            "PATCH", f"/api/resources/{resource_id}/labels", json=body
+            "PATCH", f"/api/objects/{resource_id}/labels", json=body
         )
         return response.json()
 
@@ -551,7 +551,7 @@ class BidsClient:
         Returns:
             List of tag dicts with counts.
         """
-        response = self._request("GET", "/api/tags")
+        response = self._request("GET", "/api/labels")
         return response.json()
 
     # ------------------------------------------------------------------
@@ -599,7 +599,7 @@ class BidsClient:
         Returns:
             List of Annotation objects.
         """
-        response = self._request("GET", f"/api/resources/{resource_id}/annotations")
+        response = self._request("GET", f"/api/objects/{resource_id}/annotations")
         data = response.json()
         if isinstance(data, list):
             return [Annotation(**a) for a in data]

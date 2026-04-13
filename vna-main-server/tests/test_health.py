@@ -33,7 +33,7 @@ async def test_root(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_health_endpoint(client: AsyncClient):
     """GET /v1/health returns expected keys."""
-    resp = await client.get("/v1/health")
+    resp = await client.get("/api/v1/health")
     assert resp.status_code == 200
     data = resp.json()
     assert "live" in data
@@ -47,7 +47,7 @@ async def test_health_endpoint(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_internal_status(client: AsyncClient):
     """GET /v1/internal/status returns service info."""
-    resp = await client.get("/v1/internal/status")
+    resp = await client.get("/api/v1/internal/status")
     assert resp.status_code == 200
     data = resp.json()
     assert data["service"] == "vna-main-server"

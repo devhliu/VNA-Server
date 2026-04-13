@@ -2,26 +2,37 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bids_server.db.session import get_db
+from bids_server.models.database import Task
 from bids_server.models.schemas import TaskCreate, TaskResponse
 from bids_server.services.task_service import task_service
 
-router = APIRouter(prefix="/bidsweb/v1/tasks", tags=["Tasks"])
+router = APIRouter(prefix="/api/tasks", tags=["Tasks"])
 
 
-@router.get("", response_model=list[TaskResponse])
+@router.get("")
 async def list_tasks(
     status: Optional[str] = Query(None, description="Filter by status: queued, running, completed, failed, cancelled"),
-    limit: int = 50,
-    offset: int = 0,
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
 ):
-    """List tasks."""
+    """List tasks with pagination."""
+    count_query = select(func.count()).select_from(Task)
+    if status:
+        count_query = count_query.where(Task.status == status)
+    total = (await db.execute(count_query)).scalar() or 0
+
     tasks = await task_service.list_tasks(db, status=status, limit=limit, offset=offset)
-    return [TaskResponse.model_validate(t) for t in tasks]
+    return {
+        "items": [TaskResponse.model_validate(t) for t in tasks],
+        "total": total,
+        "offset": offset,
+        "limit": limit,
+    }
 
 
 @router.get("/{task_id}", response_model=TaskResponse)

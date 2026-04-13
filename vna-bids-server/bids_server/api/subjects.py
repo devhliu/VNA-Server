@@ -9,7 +9,7 @@ from bids_server.db.session import get_db
 from bids_server.models.database import Subject
 from bids_server.models.schemas import SubjectCreate, SubjectUpdate, SubjectResponse
 
-router = APIRouter(prefix="/bidsweb/v1/subjects", tags=["Subjects"])
+router = APIRouter(prefix="/api/subjects", tags=["Subjects"])
 
 
 @router.get("")

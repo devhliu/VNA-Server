@@ -1,22 +1,33 @@
 """Webhooks API - Event subscription management."""
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bids_server.db.session import get_db
 from bids_server.models.database import Webhook
 from bids_server.models.schemas import WebhookCreate, WebhookResponse
 
-router = APIRouter(prefix="/bidsweb/v1/webhooks", tags=["Webhooks"])
+router = APIRouter(prefix="/api/webhooks", tags=["Webhooks"])
 
 
-@router.get("", response_model=list[WebhookResponse])
-async def list_webhooks(db: AsyncSession = Depends(get_db)):
-    """List all registered webhooks."""
+@router.get("")
+async def list_webhooks(
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    db: AsyncSession = Depends(get_db),
+):
+    """List all registered webhooks with pagination."""
+    total = (await db.execute(select(func.count()).select_from(Webhook))).scalar() or 0
     result = await db.execute(
-        select(Webhook).order_by(Webhook.created_at.desc())
+        select(Webhook).order_by(Webhook.created_at.desc()).limit(limit).offset(offset)
     )
-    return [WebhookResponse.model_validate(w) for w in result.scalars().all()]
+    items = [WebhookResponse.model_validate(w) for w in result.scalars().all()]
+    return {
+        "items": items,
+        "total": total,
+        "offset": offset,
+        "limit": limit,
+    }
 
 
 @router.post("", response_model=WebhookResponse, status_code=201)

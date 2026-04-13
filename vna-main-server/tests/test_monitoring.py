@@ -9,7 +9,7 @@ from httpx import AsyncClient
 @pytest.mark.asyncio
 async def test_monitoring_health(test_client: AsyncClient):
     """GET /v1/monitoring/health returns health checks."""
-    resp = await test_client.get("/v1/monitoring/health")
+    resp = await test_client.get("/api/v1/monitoring/health")
     assert resp.status_code == 200
     data = resp.json()
     assert "status" in data
@@ -25,7 +25,7 @@ async def test_monitoring_health(test_client: AsyncClient):
 @pytest.mark.asyncio
 async def test_monitoring_metrics(test_client: AsyncClient):
     """GET /v1/monitoring/metrics returns metrics."""
-    resp = await test_client.get("/v1/monitoring/metrics")
+    resp = await test_client.get("/api/v1/monitoring/metrics")
     assert resp.status_code == 200
     data = resp.json()
     assert "database" in data
@@ -40,7 +40,7 @@ async def test_monitoring_metrics(test_client: AsyncClient):
 @pytest.mark.asyncio
 async def test_monitoring_status(test_client: AsyncClient):
     """GET /v1/monitoring/status returns system status."""
-    resp = await test_client.get("/v1/monitoring/status")
+    resp = await test_client.get("/api/v1/monitoring/status")
     assert resp.status_code == 200
     data = resp.json()
     assert "health" in data
@@ -53,7 +53,7 @@ async def test_monitoring_status(test_client: AsyncClient):
 @pytest.mark.asyncio
 async def test_monitoring_component_health(test_client: AsyncClient):
     """GET /v1/monitoring/health/{component} returns specific component health."""
-    resp = await test_client.get("/v1/monitoring/health/database")
+    resp = await test_client.get("/api/v1/monitoring/health/database")
     assert resp.status_code == 200
     data = resp.json()
     assert data["component"] == "database"
@@ -64,7 +64,7 @@ async def test_monitoring_component_health(test_client: AsyncClient):
 @pytest.mark.asyncio
 async def test_monitoring_unknown_component(test_client: AsyncClient):
     """GET /v1/monitoring/health/{component} returns error for unknown component."""
-    resp = await test_client.get("/v1/monitoring/health/nonexistent")
+    resp = await test_client.get("/api/v1/monitoring/health/nonexistent")
     assert resp.status_code == 200
     data = resp.json()
     assert "error" in data
@@ -73,7 +73,7 @@ async def test_monitoring_unknown_component(test_client: AsyncClient):
 @pytest.mark.asyncio
 async def test_monitoring_prometheus(test_client: AsyncClient):
     """GET /v1/monitoring/metrics/prometheus returns Prometheus format."""
-    resp = await test_client.get("/v1/monitoring/metrics/prometheus")
+    resp = await test_client.get("/api/v1/monitoring/metrics/prometheus")
     assert resp.status_code == 200
     # Should be plain text with Prometheus format
     assert "vna_resources_total" in resp.text

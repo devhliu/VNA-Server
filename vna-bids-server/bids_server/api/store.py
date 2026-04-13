@@ -27,7 +27,7 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/bidsweb/v1/store", tags=["Store"])
+router = APIRouter(prefix="/api/store", tags=["Store"])
 
 
 @router.post("/init", response_model=UploadInitResponse)

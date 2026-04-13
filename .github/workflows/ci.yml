@@ -1,0 +1,177 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  PYTHON_VERSION: "3.12"
+  NODE_VERSION: "20"
+
+jobs:
+  lint:
+    name: Lint & Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install linting tools
+        run: pip install ruff mypy
+
+      - name: Ruff check (main server)
+        run: ruff check vna-main-server/
+
+      - name: Ruff check (BIDS server)
+        run: ruff check vna-bids-server/
+
+      - name: Ruff check (SDKs)
+        run: |
+          ruff check vna-main-sdk/
+          ruff check vna-bids-sdk/
+          ruff check vna-dicom-sdk/
+
+  test-main-server:
+    name: Test Main Server
+    runs-on: ubuntu-latest
+    env:
+      TESTING: "true"
+      REQUIRE_AUTH: "false"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          pip install -e vna-common/
+          pip install -r vna-main-server/requirements.txt
+          pip install -r vna-main-server/requirements-dev.txt
+
+      - name: Run tests
+        run: |
+          cd vna-main-server
+          python -m pytest tests/ -v --tb=short \
+            --cov=vna_main --cov-report=term-missing \
+            --cov-fail-under=40
+
+  test-bids-server:
+    name: Test BIDS Server
+    runs-on: ubuntu-latest
+    env:
+      TESTING: "true"
+      REQUIRE_AUTH: "false"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          pip install -e vna-common/
+          pip install -r vna-bids-server/requirements.txt
+          pip install -r vna-bids-server/requirements-dev.txt
+
+      - name: Run tests
+        run: |
+          cd vna-bids-server
+          python -m pytest tests/ -v --tb=short \
+            --cov=bids_server --cov-report=term-missing \
+            --cov-fail-under=40
+
+  test-sdks:
+    name: Test SDKs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install and test Main SDK
+        run: |
+          pip install -e vna-main-sdk/[dev] 2>/dev/null || pip install -e vna-main-sdk/
+          pip install pytest pytest-asyncio respx
+          cd vna-main-sdk && python -m pytest tests/ -v --tb=short
+
+      - name: Install and test BIDS SDK
+        run: |
+          pip install -e vna-bids-sdk/[dev] 2>/dev/null || pip install -e vna-bids-sdk/
+          cd vna-bids-sdk && python -m pytest tests/ -v --tb=short
+
+      - name: Install and test DICOM SDK
+        run: |
+          pip install -e vna-dicom-sdk/[dev] 2>/dev/null || pip install -e vna-dicom-sdk/
+          cd vna-dicom-sdk && python -m pytest tests/ -v --tb=short
+
+  test-frontend:
+    name: Test Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        working-directory: vna-ux
+        run: npm ci
+
+      - name: Type check
+        working-directory: vna-ux
+        run: npx tsc --noEmit
+
+      - name: Build
+        working-directory: vna-ux
+        run: npm run build
+
+  contract-test:
+    name: Contract Tests
+    runs-on: ubuntu-latest
+    needs: [test-main-server, test-bids-server]
+    env:
+      TESTING: "true"
+      REQUIRE_AUTH: "false"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install all dependencies
+        run: |
+          pip install -e vna-common/
+          pip install -r vna-main-server/requirements.txt
+          pip install -r vna-main-server/requirements-dev.txt
+          pip install -e vna-main-sdk/
+          pip install respx
+
+      - name: Run contract tests
+        run: python -m pytest tests/ -v --tb=short -k "not e2e"
+
+  docker-build:
+    name: Docker Build Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build main-server image
+        run: docker build -f vna-main-server/Dockerfile -t vna-main-server:ci .
+
+      - name: Build bids-server image
+        run: docker build -f vna-bids-server/Dockerfile -t vna-bids-server:ci .
+
+      - name: Build UX image
+        run: docker build -f vna-ux/Dockerfile -t vna-ux:ci ./vna-ux

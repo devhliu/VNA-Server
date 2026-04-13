@@ -10,7 +10,7 @@ from bids_server.db.session import get_db
 from bids_server.models.database import Session
 from bids_server.models.schemas import SessionCreate, SessionUpdate, SessionResponse
 
-router = APIRouter(prefix="/bidsweb/v1/sessions", tags=["Sessions"])
+router = APIRouter(prefix="/api/sessions", tags=["Sessions"])
 
 
 @router.get("")

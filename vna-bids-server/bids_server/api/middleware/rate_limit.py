@@ -68,12 +68,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         path = request.url.path
 
-        # Skip non-API paths and health/docs
-        if path in ("/", "/health", "/docs", "/redoc", "/openapi.json"):
+        if path.startswith("/api/") or path.startswith("/api/v1/internal"):
+            pass  # rate limit API paths
+        elif path in ("/", "/health", "/docs", "/redoc", "/openapi.json"):
             return await call_next(request)
-        if path.startswith("/static"):
-            return await call_next(request)
-        if path.startswith("/v1/health") or path.startswith("/v1/internal"):
+        elif path.startswith("/static"):
             return await call_next(request)
 
         client_ip = request.headers.get("X-Forwarded-For", "").split(",")[0].strip()

@@ -75,14 +75,14 @@ BIDS Server 是给科研用的数据管理平台
 docker compose up -d
 
 # 上传数据
-curl -X POST http://localhost:8080/bidsweb/v1/store \
+curl -X POST http://localhost:8080/api/store \
   -F "file=@T1w.nii.gz" \
   -F "subject_id=sub-001" \
   -F "modality=anat" \
   -F 'labels={"diagnosis": "tumor"}'
 
 # 查询数据
-curl -X POST http://localhost:8080/bidsweb/v1/query \
+curl -X POST http://localhost:8080/api/query \
   -H "Content-Type: application/json" \
   -d '{"labels": {"match": ["tumor"]}}'
 ```

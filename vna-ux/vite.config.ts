@@ -13,9 +13,14 @@ export default defineConfig({
   server: {
     port: 18300,
     proxy: {
-      '/api': {
+      '/api/v1': {
         target: 'http://localhost:18000',
         changeOrigin: true,
+      },
+      '/bids-api': {
+        target: 'http://localhost:18080',
+        changeOrigin: true,
+        rewrite: (path: string) => path.replace(/^\/bids-api/, '/api'),
       },
       '/dicom-web': {
         target: 'http://localhost:18042',
@@ -25,10 +30,6 @@ export default defineConfig({
         target: 'http://localhost:18042',
         changeOrigin: true,
       },
-      '/bids-api': {
-        target: 'http://localhost:18080',
-        changeOrigin: true,
-      }
     }
   }
 })

@@ -12,6 +12,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from vna_main.config import settings
 from vna_main.models.database import PatientMapping, ResourceIndex
+from vna_main.services.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 
@@ -31,34 +32,34 @@ class DicomPatientSync:
 
     async def _get_dicom_patients(self, limit: int = 1000) -> list[dict[str, Any]]:
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                resp = await client.get(
-                    f"{self.dicom_url}/patients",
-                    params={"expand": "true", "limit": limit},
-                    auth=(self.dicom_user, self.dicom_pass) if self.dicom_user else None,
-                )
-                resp.raise_for_status()
-                data = resp.json()
-                if isinstance(data, list):
-                    return data
-                if isinstance(data, dict) and "patients" in data:
-                    return data["patients"]
-                return []
+            client = get_http_client()
+            resp = await client.get(
+                f"{self.dicom_url}/patients",
+                params={"expand": "true", "limit": limit},
+                auth=(self.dicom_user, self.dicom_pass) if self.dicom_user else None,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            if isinstance(data, list):
+                return data
+            if isinstance(data, dict) and "patients" in data:
+                return data["patients"]
+            return []
         except (httpx.HTTPError, httpx.TimeoutException, OSError) as e:
             logger.error("Failed to fetch patients from Orthanc: %s", e, exc_info=True)
             return []
 
     async def _get_dicom_patient_studies(self, patient_id: str) -> list[dict[str, Any]]:
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                resp = await client.get(
-                    f"{self.dicom_url}/patients/{patient_id}/studies",
-                    params={"expand": "true"},
-                    auth=(self.dicom_user, self.dicom_pass) if self.dicom_user else None,
-                )
-                resp.raise_for_status()
-                data = resp.json()
-                return data if isinstance(data, list) else []
+            client = get_http_client()
+            resp = await client.get(
+                f"{self.dicom_url}/patients/{patient_id}/studies",
+                params={"expand": "true"},
+                auth=(self.dicom_user, self.dicom_pass) if self.dicom_user else None,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            return data if isinstance(data, list) else []
         except (httpx.HTTPError, httpx.TimeoutException, OSError) as e:
             logger.error("Failed to fetch studies for patient %s: %s", patient_id, e, exc_info=True)
             return []

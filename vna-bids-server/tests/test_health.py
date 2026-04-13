@@ -60,7 +60,7 @@ async def test_root(client):
 
 @pytest.mark.asyncio
 async def test_internal_status(client):
-    resp = await client.post("/v1/internal/status")
+    resp = await client.post("/api/v1/internal/status")
     assert resp.status_code == 200
     body = resp.json()
     assert body["service"] == "bids-server"

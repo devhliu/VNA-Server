@@ -15,13 +15,13 @@ export interface ArchiveResource {
 export function useArchiveChildren(parentId?: string) {
   return useQuery({
     queryKey: ['archive', parentId || 'root'],
-    queryFn: () => fetchApi<ArchiveResource[]>(parentId ? `/archive/${parentId}/children` : '/archive'),
+    queryFn: () => fetchApi<ArchiveResource[]>(parentId ? `/api/v1/resources?parent=${parentId}` : '/api/v1/resources'),
   })
 }
 
 export function useArchiveResource(id: string) {
   return useQuery({
     queryKey: ['archive', id],
-    queryFn: () => fetchApi<ArchiveResource>(`/archive/${id}`),
+    queryFn: () => fetchApi<ArchiveResource>(`/api/v1/resources/${id}`),
   })
 }

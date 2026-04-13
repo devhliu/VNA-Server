@@ -9,7 +9,7 @@ from bids_server.db.session import get_db
 from bids_server.models.database import Resource, Label
 from bids_server.models.schemas import QueryRequest, QueryResponse, ResourceResponse
 
-router = APIRouter(prefix="/bidsweb/v1/query", tags=["Query"])
+router = APIRouter(prefix="/api/query", tags=["Query"])
 
 
 @router.post("", response_model=QueryResponse)

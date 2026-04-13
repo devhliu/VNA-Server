@@ -14,7 +14,7 @@ from bids_server.services.advanced_validator import (
 )
 
 
-router = APIRouter(prefix="/bidsweb/v1/validation", tags=["Validation"])
+router = APIRouter(prefix="/api/validation", tags=["Validation"])
 
 
 class ValidateFileRequest(BaseModel):

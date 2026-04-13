@@ -101,7 +101,7 @@ other          other/      任意格式 + .json              其他自定义
 
 ### 4.2 扩展方式
 
-通过 API `POST /bidsweb/v1/modalities` 注册新模态，或在 `config/modalities.yaml` 中定义。
+通过 API `POST /api/modalities` 注册新模态，或在 `config/modalities.yaml` 中定义。
 
 ---
 
@@ -112,23 +112,23 @@ other          other/      任意格式 + .json              其他自定义
 ```
 DICOMweb              BIDSweb                    说明
 ─────────────────    ────────────────────────    ─────────────
-POST /studies        POST /bidsweb/v1/store      存储对象
-GET  /studies/{uid}  GET  /bidsweb/v1/objects/   检索对象
+POST /studies        POST /api/store      存储对象
+GET  /studies/{uid}  GET  /api/objects/   检索对象
                        {resourceId}
-GET  /studies?...    POST /bidsweb/v1/query      查询对象
-POST /studies/batch  POST /bidsweb/v1/store      批量存储
+GET  /studies?...    POST /api/query      查询对象
+POST /studies/batch  POST /api/store      批量存储
                      (multipart)
-GET  /wado-rs/...    GET  /bidsweb/v1/objects/    渲染/预览
+GET  /wado-rs/...    GET  /api/objects/    渲染/预览
                        {resourceId}/render
--                    POST /bidsweb/v1/tasks       异步任务
--                    GET  /bidsweb/v1/tasks/{id}  任务状态
--                    POST /bidsweb/v1/webhooks    事件订阅
--                    CRUD /bidsweb/v1/labels      标签管理
--                    CRUD /bidsweb/v1/annotations 标注管理
--                    GET  /bidsweb/v1/subjects    患者管理
--                    GET  /bidsweb/v1/sessions    会话管理
--                    POST /bidsweb/v1/verify      数据校验
--                    POST /bidsweb/v1/rebuild     数据库重建
+-                    POST /api/tasks       异步任务
+-                    GET  /api/tasks/{id}  任务状态
+-                    POST /api/webhooks    事件订阅
+-                    CRUD /api/labels      标签管理
+-                    CRUD /api/annotations 标注管理
+-                    GET  /api/subjects    患者管理
+-                    GET  /api/sessions    会话管理
+-                    POST /api/verify      数据校验
+-                    POST /api/rebuild     数据库重建
 ```
 
 ### 5.2 完整 API 路径
@@ -136,7 +136,7 @@ GET  /wado-rs/...    GET  /bidsweb/v1/objects/    渲染/预览
 ```
 BIDSweb v1 API
 │
-├── /bidsweb/v1/
+├── /api/
 │   │
 │   ├── store                    # 存储（对标 C-STORE / STOW-RS）
 │   │   ├── POST   单文件上传
@@ -374,16 +374,16 @@ CREATE TABLE modalities (
 Resumable Upload:
 
 1. 初始化上传
-   POST /bidsweb/v1/store/init
+   POST /api/store/init
    → 返回 uploadId
 
 2. 分块上传
-   PATCH /bidsweb/v1/store/{uploadId}
+   PATCH /api/store/{uploadId}
    Content-Range: bytes 0-10485759/157286400
    Body: <binary chunk>
 
 3. 完成上传
-   POST /bidsweb/v1/store/{uploadId}/complete
+   POST /api/store/{uploadId}/complete
    → 返回 Resource 对象
 ```
 
@@ -393,12 +393,12 @@ Resumable Upload:
 HTTP Range + Streaming:
 
 单文件下载:
-  GET /bidsweb/v1/objects/{resourceId}/stream
+  GET /api/objects/{resourceId}/stream
   Range: bytes=0-10485759
   → 支持断点续传
 
 批量下载:
-  POST /bidsweb/v1/objects/batch-download
+  POST /api/objects/batch-download
   → 流式打包返回 zip
 ```
 

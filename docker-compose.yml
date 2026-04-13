@@ -17,6 +17,11 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+          cpus: "1.0"
 
   redis:
     image: redis:7-alpine
@@ -32,9 +37,16 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: "0.5"
 
   main-server:
-    build: ./vna-main-server
+    build:
+      context: .
+      dockerfile: vna-main-server/Dockerfile
     env_file:
       - .env
     ports:
@@ -55,7 +67,7 @@ services:
       DB_POOL_TIMEOUT: ${DB_POOL_TIMEOUT}
       DB_POOL_RECYCLE: ${DB_POOL_RECYCLE}
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import httpx; r=httpx.get('http://localhost:8000/v1/internal/status'); r.raise_for_status()\""]
+      test: ["CMD-SHELL", "python -c \"import httpx; r=httpx.get('http://localhost:8000/api/v1/internal/status'); r.raise_for_status()\""]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -65,6 +77,11 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+          cpus: "1.0"
 
   dicom-server:
     build: ./vna-dicom-server
@@ -84,8 +101,11 @@ services:
       VOLVIEW_PLUGIN_ENABLED: "true"
       ORTHANC_WEB_VIEWER_PLUGIN_ENABLED: "true"
       ORTHANC_EXPLORER_2_ENABLED: "true"
+      # Use filesystem storage for DICOM files instead of PostgreSQL (better for large datasets)
+      ORTHANC__POSTGRESQL__ENABLE_STORAGE: "false"
     volumes:
       - orthanc_data:/var/lib/orthanc/db
+      - orthanc_storage:/var/lib/orthanc/storage
     healthcheck:
       test: ["CMD-SHELL", "python3 -c \"import os, urllib.request; pm=urllib.request.HTTPPasswordMgrWithDefaultRealm(); pm.add_password(None, 'http://localhost:8042', os.environ.get('DICOM_SERVER_USER', 'vna-orthanc-user'), os.environ.get('DICOM_SERVER_PASSWORD', '')); opener=urllib.request.build_opener(urllib.request.HTTPBasicAuthHandler(pm)); opener.open('http://localhost:8042/system')\""]
       interval: 10s
@@ -95,9 +115,16 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+          cpus: "2.0"
 
   bids-server:
-    build: ./vna-bids-server
+    build:
+      context: .
+      dockerfile: vna-bids-server/Dockerfile
     env_file:
       - .env
     ports:
@@ -109,7 +136,7 @@ services:
       ENABLE_BACKGROUND_WORKER: ${ENABLE_BACKGROUND_WORKER}
       WORKER_POLL_INTERVAL: ${WORKER_POLL_INTERVAL}
       BIDS_API_KEY: ${BIDS_API_KEY}
-      MAIN_SERVER_SYNC_URL: "http://main-server:8000/v1/sync/events/bids"
+      MAIN_SERVER_SYNC_URL: "http://main-server:8000/api/v1/sync/events/bids"
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import httpx; r=httpx.get('http://localhost:8080/health'); r.raise_for_status()\""]
       interval: 10s
@@ -121,6 +148,11 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+          cpus: "1.0"
 
   ux-server:
     build: ./vna-ux
@@ -129,9 +161,15 @@ services:
     depends_on:
       main-server:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+          cpus: "0.5"
 
 volumes:
   pgdata:
   redis_data:
   orthanc_data:
+  orthanc_storage:
   bids_data:

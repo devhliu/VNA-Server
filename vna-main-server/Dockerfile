@@ -13,8 +13,10 @@ RUN if [ -f /etc/apt/sources.list.d/debian.sources ]; then \
  && apt-get install -y --no-install-recommends gcc \
  && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir --prefix=/install -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt
+COPY vna-main-server/requirements.txt .
+COPY vna-common /build/vna-common
+RUN pip install --no-cache-dir --prefix=/install -i https://pypi.tuna.tsinghua.edu.cn/simple --no-deps /build/vna-common \
+ && pip install --no-cache-dir --prefix=/install -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt
 
 # ---- Runtime stage ----
 FROM python:3.12-slim
@@ -30,7 +32,7 @@ WORKDIR /app
 
 COPY --from=builder /install /usr/local
 
-COPY . .
+COPY vna-main-server/ .
 RUN chmod +x /app/scripts/start.sh
 
 EXPOSE 8000

@@ -29,7 +29,7 @@ docker compose logs -f bids-server
 ```
 
 服务启动后访问：
-- **API**: http://localhost:8080/bidsweb/v1/
+- **API**: http://localhost:8080/api/
 - **Swagger 文档**: http://localhost:8080/docs
 - **ReDoc 文档**: http://localhost:8080/redoc
 
@@ -51,13 +51,13 @@ uvicorn bids_server.main:app --reload --port 8080
 ```
 BIDSweb v1 API
 │
-├── /bidsweb/v1/store          # 文件存储 (上传)
+├── /api/store          # 文件存储 (上传)
 │   ├── POST   /init           # 初始化分块上传
 │   ├── PATCH  /{uploadId}     # 上传分块
 │   ├── POST   /{uploadId}/complete  # 完成上传
 │   └── POST   /               # 直接上传单文件
 │
-├── /bidsweb/v1/objects        # 文件检索 (下载)
+├── /api/objects        # 文件检索 (下载)
 │   ├── GET    /{id}           # 下载文件
 │   ├── GET    /{id}/stream    # 流式下载 (支持 Range)
 │   ├── GET    /{id}/metadata  # 获取侧车 JSON
@@ -68,53 +68,53 @@ BIDSweb v1 API
 │   ├── DELETE /{id}           # 删除文件
 │   └── POST   /batch-download # 批量下载 (zip)
 │
-├── /bidsweb/v1/query          # 数据查询
+├── /api/query          # 数据查询
 │   └── POST   /               # 组合查询
 │
-├── /bidsweb/v1/subjects       # 患者管理
+├── /api/subjects       # 患者管理
 │   ├── GET    /               # 列出患者
 │   ├── POST   /               # 创建患者
 │   ├── GET    /{id}           # 获取患者
 │   ├── PUT    /{id}           # 更新患者
 │   └── DELETE /{id}           # 删除患者
 │
-├── /bidsweb/v1/sessions       # 会话管理
+├── /api/sessions       # 会话管理
 │   ├── GET    /               # 列出会话
 │   ├── POST   /               # 创建会话
 │   ├── GET    /{id}           # 获取会话
 │   └── DELETE /{id}           # 删除会话
 │
-├── /bidsweb/v1/labels         # 标签管理
+├── /api/labels         # 标签管理
 │   ├── GET    /               # 列出所有标签
 │   ├── GET    /{resourceId}   # 获取资源标签
 │   ├── PUT    /{resourceId}   # 替换标签
 │   └── PATCH  /{resourceId}   # 增量更新标签
 │
-├── /bidsweb/v1/annotations    # 标注管理
+├── /api/annotations    # 标注管理
 │   ├── GET    /               # 列出标注
 │   ├── POST   /               # 创建标注
 │   ├── PUT    /{id}           # 更新标注
 │   └── DELETE /{id}           # 删除标注
 │
-├── /bidsweb/v1/tasks          # 异步任务
+├── /api/tasks          # 异步任务
 │   ├── GET    /               # 列出任务
 │   ├── POST   /               # 提交任务
 │   ├── GET    /{id}           # 查询状态
 │   └── DELETE /{id}           # 取消任务
 │
-├── /bidsweb/v1/webhooks       # 事件订阅
+├── /api/webhooks       # 事件订阅
 │   ├── GET    /               # 列出 webhooks
 │   ├── POST   /               # 注册 webhook
 │   └── DELETE /{id}           # 删除 webhook
 │
-├── /bidsweb/v1/modalities     # 模态管理
+├── /api/modalities     # 模态管理
 │   ├── GET    /               # 列出模态
 │   └── POST   /               # 注册新模态
 │
-├── /bidsweb/v1/verify         # 数据校验
+├── /api/verify         # 数据校验
 │   └── POST   /               # 校验完整性
 │
-└── /bidsweb/v1/rebuild        # 数据库重建
+└── /api/rebuild        # 数据库重建
     └── POST   /               # 从文件系统重建
 ```
 
@@ -124,7 +124,7 @@ BIDSweb v1 API
 
 ```bash
 # 直接上传
-curl -X POST http://localhost:8080/bidsweb/v1/store \
+curl -X POST http://localhost:8080/api/store \
   -F "file=@sub-001_ses-001_T1w.nii.gz" \
   -F "subject_id=sub-001" \
   -F "session_id=sub-001_ses-001" \
@@ -135,7 +135,7 @@ curl -X POST http://localhost:8080/bidsweb/v1/store \
 ### 查询数据
 
 ```bash
-curl -X POST http://localhost:8080/bidsweb/v1/query \
+curl -X POST http://localhost:8080/api/query \
   -H "Content-Type: application/json" \
   -d '{
     "subject_id": "sub-001",
@@ -148,17 +148,17 @@ curl -X POST http://localhost:8080/bidsweb/v1/query \
 
 ```bash
 # 普通下载
-curl http://localhost:8080/bidsweb/v1/objects/res-xxxxx -o output.nii.gz
+curl http://localhost:8080/api/objects/res-xxxxx -o output.nii.gz
 
 # 流式下载（大文件）
-curl http://localhost:8080/bidsweb/v1/objects/res-xxxxx/stream \
+curl http://localhost:8080/api/objects/res-xxxxx/stream \
   -H "Range: bytes=0-10485759" -o partial.bin
 ```
 
 ### 打标签
 
 ```bash
-curl -X PUT http://localhost:8080/bidsweb/v1/labels/res-xxxxx \
+curl -X PUT http://localhost:8080/api/labels/res-xxxxx \
   -H "Content-Type: application/json" \
   -d '{"labels": {"diagnosis": "glioma", "grade": "3", "reviewed": "true"}}'
 ```
@@ -166,7 +166,7 @@ curl -X PUT http://localhost:8080/bidsweb/v1/labels/res-xxxxx \
 ### 创建标注
 
 ```bash
-curl -X POST http://localhost:8080/bidsweb/v1/annotations \
+curl -X POST http://localhost:8080/api/annotations \
   -H "Content-Type: application/json" \
   -d '{
     "resource_id": "res-xxxxx",
@@ -181,7 +181,7 @@ curl -X POST http://localhost:8080/bidsweb/v1/annotations \
 ### 数据库重建
 
 ```bash
-curl -X POST http://localhost:8080/bidsweb/v1/rebuild \
+curl -X POST http://localhost:8080/api/rebuild \
   -H "Content-Type: application/json" \
   -d '{"target": "all", "clear_existing": false}'
 ```

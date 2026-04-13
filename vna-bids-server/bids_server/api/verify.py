@@ -12,7 +12,7 @@ from bids_server.models.schemas import VerifyRequest, VerifyResponse, VerifyResu
 from bids_server.core.storage import storage
 from bids_server.core.hash import hash_file
 
-router = APIRouter(prefix="/bidsweb/v1/verify", tags=["Verify"])
+router = APIRouter(prefix="/api/verify", tags=["Verify"])
 
 
 @router.post("", response_model=VerifyResponse)

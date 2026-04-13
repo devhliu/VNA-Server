@@ -36,7 +36,7 @@ export interface ActivityEvent {
 export function useSystemStatus() {
   return useQuery({
     queryKey: ['system', 'status'],
-    queryFn: () => fetchApi<ServiceStatus[]>('/system/status'),
+    queryFn: () => fetchApi<ServiceStatus[]>('/api/v1/monitoring/health'),
     refetchInterval: 15000,
   })
 }
@@ -44,7 +44,7 @@ export function useSystemStatus() {
 export function useSystemMetrics() {
   return useQuery({
     queryKey: ['system', 'metrics'],
-    queryFn: () => fetchApi<SystemMetrics>('/system/metrics'),
+    queryFn: () => fetchApi<SystemMetrics>('/api/v1/monitoring/metrics'),
     refetchInterval: 60000,
   })
 }
@@ -52,7 +52,7 @@ export function useSystemMetrics() {
 export function useRecentActivity() {
   return useQuery({
     queryKey: ['system', 'activity'],
-    queryFn: () => fetchApi<ActivityEvent[]>('/system/activity?limit=20'),
+    queryFn: () => fetchApi<ActivityEvent[]>('/api/v1/monitoring/metrics?type=activity&limit=20'),
     refetchInterval: 30000,
   })
 }

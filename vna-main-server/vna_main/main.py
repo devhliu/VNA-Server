@@ -4,8 +4,8 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import Depends, FastAPI
-from fastapi.responses import FileResponse
+from fastapi import Depends, FastAPI, Request
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from vna_main.api.deps.auth import require_vna_api_key
@@ -28,12 +28,13 @@ from vna_main.api.routes import (
 )
 from vna_main.config import settings
 from vna_main.models.database import init_db
-from vna_main.api.middleware.request_id import RequestIDMiddleware
-from vna_main.api.middleware.logging import setup_json_logging
-from vna_main.api.middleware.api_version import APIVersionMiddleware
+from vna_common.middleware.request_id import RequestIDMiddleware
+from vna_common.middleware.logging import setup_json_logging
+from vna_common.middleware.api_version import APIVersionMiddleware
 from vna_main.api.middleware.rate_limit import RateLimitMiddleware
-from vna_main.api.responses import ErrorResponse
+from vna_common.responses import ErrorResponse
 from vna_main.services.cache_service import close_cache
+from vna_main.services.http_client import close_http_client
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +62,11 @@ async def lifespan(app: FastAPI):
     yield
     logger.info("Shutting down VNA Main Server")
     try:
+        await close_http_client()
+        logger.info("HTTP client closed")
+    except Exception as e:
+        logger.error("Error closing HTTP client: %s", e)
+    try:
         await close_cache()
         logger.info("Cache connection closed")
     except Exception as e:
@@ -80,22 +86,22 @@ app.add_middleware(RateLimitMiddleware)
 app.add_middleware(APIVersionMiddleware, version="v1")
 app.add_middleware(RequestIDMiddleware)
 
-app.include_router(internal.router, prefix="/v1")
-app.include_router(resources.router, prefix="/v1", dependencies=protected_dependencies)
-app.include_router(patients_sync.router, prefix="/v1", dependencies=protected_dependencies)
-app.include_router(patients.router, prefix="/v1", dependencies=protected_dependencies)
-app.include_router(labels.router, prefix="/v1", dependencies=protected_dependencies)
-app.include_router(query.router, prefix="/v1", dependencies=protected_dependencies)
-app.include_router(sync.router, prefix="/v1", dependencies=protected_dependencies)
-app.include_router(health.router, prefix="/v1")
-app.include_router(webhooks.router, prefix="/v1", dependencies=protected_dependencies)
-app.include_router(versions.router, prefix="/v1", dependencies=protected_dependencies)
-app.include_router(monitoring.router, prefix="/v1", dependencies=protected_dependencies)
-app.include_router(routing.router, prefix="/v1", dependencies=protected_dependencies)
-app.include_router(projects.router, prefix="/v1", dependencies=protected_dependencies)
-app.include_router(treatments.router, prefix="/v1", dependencies=protected_dependencies)
-app.include_router(treatments.timeline_router, prefix="/v1", dependencies=protected_dependencies)
-app.include_router(audit.router, prefix="/v1", dependencies=protected_dependencies)
+app.include_router(internal.router, prefix="/api/v1")
+app.include_router(resources.router, prefix="/api/v1", dependencies=protected_dependencies)
+app.include_router(patients_sync.router, prefix="/api/v1", dependencies=protected_dependencies)
+app.include_router(patients.router, prefix="/api/v1", dependencies=protected_dependencies)
+app.include_router(labels.router, prefix="/api/v1", dependencies=protected_dependencies)
+app.include_router(query.router, prefix="/api/v1", dependencies=protected_dependencies)
+app.include_router(sync.router, prefix="/api/v1", dependencies=protected_dependencies)
+app.include_router(health.router, prefix="/api/v1")
+app.include_router(webhooks.router, prefix="/api/v1", dependencies=protected_dependencies)
+app.include_router(versions.router, prefix="/api/v1", dependencies=protected_dependencies)
+app.include_router(monitoring.router, prefix="/api/v1", dependencies=protected_dependencies)
+app.include_router(routing.router, prefix="/api/v1", dependencies=protected_dependencies)
+app.include_router(projects.router, prefix="/api/v1", dependencies=protected_dependencies)
+app.include_router(treatments.router, prefix="/api/v1", dependencies=protected_dependencies)
+app.include_router(treatments.timeline_router, prefix="/api/v1", dependencies=protected_dependencies)
+app.include_router(audit.router, prefix="/api/v1", dependencies=protected_dependencies)
 
 
 @app.get("/")
@@ -112,13 +118,15 @@ async def routing_ui():
 
 
 @app.exception_handler(Exception)
-async def global_exception_handler(request, exc):
+async def global_exception_handler(request: Request, exc: Exception):
     request_id = getattr(request.state, "request_id", "unknown")
     logger.exception("Unhandled exception occurred during request (request_id=%s)", request_id)
-    return ErrorResponse(
+    body = ErrorResponse(
         error="Internal server error",
-        details={"message": "An internal error occurred. Contact support with request ID: %s" % request_id}
+        details={"message": f"An internal error occurred. Contact support with request ID: {request_id}"},
+        path=str(request.url.path),
     )
+    return JSONResponse(status_code=500, content=body.model_dump(mode="json"))
 
 
 if STATIC_DIR.exists():

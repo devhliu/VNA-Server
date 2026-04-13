@@ -20,14 +20,14 @@ export interface ActivityEvent {
 export function useLabels() {
   return useQuery({
     queryKey: ['labels'],
-    queryFn: () => fetchApi<Label[]>('/labels'),
+    queryFn: () => fetchApi<Label[]>('/api/v1/labels/tags'),
   })
 }
 
 export function useCreateLabel() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (label: Partial<Label>) => fetchApi('/labels', {
+    mutationFn: (label: Partial<Label>) => fetchApi('/api/v1/labels/tags', {
       method: 'POST',
       body: JSON.stringify(label)
     }),
@@ -38,7 +38,7 @@ export function useCreateLabel() {
 export function useDeleteLabel() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (id: string) => fetchApi(`/labels/${id}`, { method: 'DELETE' }),
+    mutationFn: (id: string) => fetchApi(`/api/v1/labels/tags/${id}`, { method: 'DELETE' }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['labels'] })
   })
 }

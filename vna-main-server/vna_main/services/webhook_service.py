@@ -179,12 +179,13 @@ class WebhookDelivery:
         last_error: str | None = None
         for attempt in range(self.max_retries):
             try:
-                async with httpx.AsyncClient(timeout=30.0) as client:
-                    resp = await client.post(
-                        sub.url,
-                        content=payload_json,
-                        headers=headers,
-                    )
+                from vna_main.services.http_client import get_http_client
+                client = get_http_client()
+                resp = await client.post(
+                    sub.url,
+                    content=payload_json,
+                    headers=headers,
+                )
                     success = 200 <= resp.status_code < 300
                     return {
                         "delivery_id": delivery_id,

@@ -21,7 +21,7 @@ from bids_server.services.search_service import search_service
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/bidsweb/v1/rebuild", tags=["Rebuild"])
+router = APIRouter(prefix="/api/rebuild", tags=["Rebuild"])
 
 
 @router.post("", response_model=RebuildResponse)
@@ -163,10 +163,11 @@ async def rebuild_database(
         elif not file_name.endswith(".json"):
             json_path = str(file_path).rsplit(".", 1)[0] + ".json"
             json_file = Path(json_path)
-            if json_file.exists():
+            json_exists = await asyncio.to_thread(json_file.exists)
+            if json_exists:
                 try:
-                    with open(json_file) as f:
-                        sidecar = json.load(f)
+                    async with aiofiles.open(json_file) as f:
+                        sidecar = json.loads(await f.read())
                     vna_data = sidecar.get("VNA", {})
                     labels = vna_data.get("labels", {})
                     for key, value in labels.items():

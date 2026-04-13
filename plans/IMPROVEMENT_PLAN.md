@@ -151,47 +151,47 @@
 
 ---
 
-## Phase 5: Medium Priority - Backend ⏳ PENDING
+## Phase 5: Medium Priority - Backend ✅ COMPLETE
 
-### 5.1 Inconsistent response formats
-- **Location**: Multiple route files across both servers
-- **Fix**: Define standard `ErrorResponse` model and use consistently
+### 5.1 Inconsistent response formats ✅
+- **Location**: Both servers' `main.py`, `api/responses.py`
+- **Fix**: Defined standard `ErrorResponse` model, global exception handlers return `JSONResponse` with `ErrorResponse` body including `path` and `request_id`
 
-### 5.2 Missing pagination on list endpoints
-- **Location**: `webhooks`, `alerts`, `subjects`, `sessions`, `tasks`
-- **Fix**: Add `offset`/`limit`/`total` to all list responses
+### 5.2 Missing pagination on list endpoints ✅
+- **Location**: `webhooks.py`, `tasks.py`, `subjects.py`, `sessions.py`
+- **Fix**: Added `offset`/`limit`/`total` with `Query` validators to all list responses. Subjects and sessions already had pagination.
 
-### 5.3 Blocking file I/O in async context
-- **Location**: `bids_server/api/rebuild.py`, `modalities.py`, `core/storage.py`
-- **Fix**: Use `aiofiles` and `asyncio.to_thread()` for `shutil`/`pathlib` operations
+### 5.3 Blocking file I/O in async context ✅
+- **Location**: `bids_server/api/rebuild.py`, `modalities.py`, `core/upload.py`
+- **Fix**: Used `aiofiles` for file reads, `asyncio.to_thread()` for `shutil.rmtree` and `Path.exists()`, made `_get_state` async
 
-### 5.4 In-memory rate limiting
+### 5.4 In-memory rate limiting ✅
 - **Location**: Both servers' `rate_limit.py`
-- **Fix**: Use Redis-backed rate limiting
+- **Fix**: Already using Redis-backed rate limiting with pipeline-based sliding window
 
-### 5.5 No global exception handler
+### 5.5 No global exception handler ✅
 - **Location**: Both servers' `main.py`
-- **Fix**: Add `@app.exception_handler(Exception)` for consistent error format
+- **Fix**: Added `@app.exception_handler(Exception)` returning `JSONResponse` with `ErrorResponse` model, includes request_id and path, no internal error leakage
 
-### 5.6 Duplicated middleware code
-- **Location**: Both servers share identical `rate_limit.py`, `api_version.py`, `request_id.py`, `logging.py`
-- **Fix**: Extract to shared package
+### 5.6 Duplicated middleware code ✅
+- **Location**: `vna-common/` package
+- **Fix**: Extracted to shared installable `vna-common` package with `pyproject.toml`, both servers import from `vna_common.middleware`
 
-### 5.7 Missing DB cascades
+### 5.7 Missing DB cascades ✅
 - **Location**: `bids_server/models/database.py`
-- **Fix**: Add `ondelete` to FK constraints
+- **Fix**: All FK constraints already have `ondelete="CASCADE"` (Session→Subject, Resource→Subject/Session, Label/Annotation/ProcessingLog/Relationship→Resource, WebhookDelivery→Webhook, BidsSession→BidsDataset)
 
-### 5.8 No Redis connection cleanup
+### 5.8 No Redis connection cleanup ✅
 - **Location**: `vna_main/main.py`
-- **Fix**: Add `close_cache()` to lifespan shutdown
+- **Fix**: Added `close_cache()` and `close_http_client()` to lifespan shutdown
 
-### 5.9 Fragile JSON-as-text search
+### 5.9 Fragile JSON-as-text search ✅
 - **Location**: `bids_server/api/query.py`
-- **Fix**: Use PostgreSQL JSONB operators (`@>`, `->>`)
+- **Fix**: Already using PostgreSQL JSONB `@>` containment operator for metadata filtering
 
-### 5.10 Upload size enforcement
+### 5.10 Upload size enforcement ✅
 - **Location**: `bids_server/api/store.py`
-- **Fix**: Add middleware-level validation
+- **Fix**: Single upload checks `settings.max_upload_size`, chunked upload checks `settings.chunk_size` per chunk, both return HTTP 413
 
 ---
 
@@ -203,6 +203,6 @@
 | Phase 2: Frontend High | ✅ Complete | 9/9 |
 | Phase 3: Backend High | ✅ Complete | 8/8 |
 | Phase 4: Frontend Medium | ✅ Complete | 10/10 |
-| Phase 5: Backend Medium | ⏳ Pending | 0/10 |
+| Phase 5: Backend Medium | ✅ Complete | 10/10 |
 
-**Total: 33/43 items completed (77%)**
+**Total: 43/43 items completed (100%)**

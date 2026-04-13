@@ -14,7 +14,7 @@ from bids_server.core.webhook_manager import webhook_manager
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/bidsweb/v1/annotations", tags=["Annotations"])
+router = APIRouter(prefix="/api/annotations", tags=["Annotations"])
 
 
 @router.get("", response_model=list[AnnotationResponse])

@@ -25,7 +25,7 @@ class TestHealthEndpoints:
 @pytest.mark.asyncio
 class TestSubjectsAPI:
     async def test_create_subject(self, client):
-        resp = await client.post("/bidsweb/v1/subjects", json={
+        resp = await client.post("/api/subjects", json={
             "subject_id": "sub-001",
             "patient_ref": "pt-001",
             "hospital_ids": {"hospitalA": "P001"},
@@ -36,38 +36,38 @@ class TestSubjectsAPI:
         assert data["patient_ref"] == "pt-001"
 
     async def test_create_duplicate_subject(self, client):
-        await client.post("/bidsweb/v1/subjects", json={"subject_id": "sub-001"})
-        resp = await client.post("/bidsweb/v1/subjects", json={"subject_id": "sub-001"})
+        await client.post("/api/subjects", json={"subject_id": "sub-001"})
+        resp = await client.post("/api/subjects", json={"subject_id": "sub-001"})
         assert resp.status_code == 409
 
     async def test_get_subject(self, client):
-        await client.post("/bidsweb/v1/subjects", json={"subject_id": "sub-002"})
-        resp = await client.get("/bidsweb/v1/subjects/sub-002")
+        await client.post("/api/subjects", json={"subject_id": "sub-002"})
+        resp = await client.get("/api/subjects/sub-002")
         assert resp.status_code == 200
         assert resp.json()["subject_id"] == "sub-002"
 
     async def test_get_nonexistent_subject(self, client):
-        resp = await client.get("/bidsweb/v1/subjects/sub-999")
+        resp = await client.get("/api/subjects/sub-999")
         assert resp.status_code == 404
 
     async def test_list_subjects(self, client):
-        await client.post("/bidsweb/v1/subjects", json={"subject_id": "sub-003"})
-        await client.post("/bidsweb/v1/subjects", json={"subject_id": "sub-004"})
-        resp = await client.get("/bidsweb/v1/subjects")
+        await client.post("/api/subjects", json={"subject_id": "sub-003"})
+        await client.post("/api/subjects", json={"subject_id": "sub-004"})
+        resp = await client.get("/api/subjects")
         assert resp.status_code == 200
         assert len(resp.json()) >= 2
 
     async def test_update_subject(self, client):
-        await client.post("/bidsweb/v1/subjects", json={"subject_id": "sub-005"})
-        resp = await client.put("/bidsweb/v1/subjects/sub-005", json={
+        await client.post("/api/subjects", json={"subject_id": "sub-005"})
+        resp = await client.put("/api/subjects/sub-005", json={
             "patient_ref": "pt-updated",
         })
         assert resp.status_code == 200
         assert resp.json()["patient_ref"] == "pt-updated"
 
     async def test_delete_subject(self, client):
-        await client.post("/bidsweb/v1/subjects", json={"subject_id": "sub-006"})
-        resp = await client.delete("/bidsweb/v1/subjects/sub-006")
+        await client.post("/api/subjects", json={"subject_id": "sub-006"})
+        resp = await client.delete("/api/subjects/sub-006")
         assert resp.status_code == 200
         assert resp.json()["deleted"] is True
 
@@ -75,8 +75,8 @@ class TestSubjectsAPI:
 @pytest.mark.asyncio
 class TestSessionsAPI:
     async def test_create_session(self, client):
-        await client.post("/bidsweb/v1/subjects", json={"subject_id": "sub-010"})
-        resp = await client.post("/bidsweb/v1/sessions", json={
+        await client.post("/api/subjects", json={"subject_id": "sub-010"})
+        resp = await client.post("/api/sessions", json={
             "session_id": "sub-010_ses-001",
             "subject_id": "sub-010",
             "session_label": "ses-001",
@@ -85,12 +85,12 @@ class TestSessionsAPI:
         assert resp.json()["session_id"] == "sub-010_ses-001"
 
     async def test_list_sessions_by_subject(self, client):
-        await client.post("/bidsweb/v1/subjects", json={"subject_id": "sub-011"})
-        await client.post("/bidsweb/v1/sessions", json={
+        await client.post("/api/subjects", json={"subject_id": "sub-011"})
+        await client.post("/api/sessions", json={
             "session_id": "sub-011_ses-001",
             "subject_id": "sub-011",
         })
-        resp = await client.get("/bidsweb/v1/sessions?subject_id=sub-011")
+        resp = await client.get("/api/sessions?subject_id=sub-011")
         assert resp.status_code == 200
         assert len(resp.json()) == 1
 
@@ -99,8 +99,8 @@ class TestSessionsAPI:
 class TestStoreAPI:
     async def test_upload_single_file(self, client):
         # Create subject first
-        await client.post("/bidsweb/v1/subjects", json={"subject_id": "sub-020"})
-        await client.post("/bidsweb/v1/sessions", json={
+        await client.post("/api/subjects", json={"subject_id": "sub-020"})
+        await client.post("/api/sessions", json={
             "session_id": "sub-020_ses-001",
             "subject_id": "sub-020",
         })
@@ -108,7 +108,7 @@ class TestStoreAPI:
         # Upload file
         file_content = b"test nifti data"
         resp = await client.post(
-            "/bidsweb/v1/store",
+            "/api/store",
             data={
                 "subject_id": "sub-020",
                 "session_id": "sub-020_ses-001",
@@ -124,10 +124,10 @@ class TestStoreAPI:
         assert data["file_size"] == len(file_content)
 
     async def test_upload_with_labels(self, client):
-        await client.post("/bidsweb/v1/subjects", json={"subject_id": "sub-021"})
+        await client.post("/api/subjects", json={"subject_id": "sub-021"})
 
         resp = await client.post(
-            "/bidsweb/v1/store",
+            "/api/store",
             data={
                 "subject_id": "sub-021",
                 "modality": "anat",
@@ -139,7 +139,7 @@ class TestStoreAPI:
 
     async def test_chunked_upload_flow(self, client):
         # Init upload
-        resp = await client.post("/bidsweb/v1/store/init", json={
+        resp = await client.post("/api/store/init", json={
             "file_name": "large_file.nii.gz",
             "file_size": 100,
             "modality": "anat",
@@ -151,14 +151,14 @@ class TestStoreAPI:
 
         # Upload chunk
         resp = await client.patch(
-            f"/bidsweb/v1/store/{upload_id}",
+            f"/api/store/{upload_id}",
             data={"chunk_index": "0"},
             files={"file": ("chunk", b"x" * 100, "application/octet-stream")},
         )
         assert resp.status_code == 200
 
         # Complete upload
-        resp = await client.post(f"/bidsweb/v1/store/{upload_id}/complete")
+        resp = await client.post(f"/api/store/{upload_id}/complete")
         assert resp.status_code == 200
         assert resp.json()["resource_id"].startswith("res-")
 
@@ -166,11 +166,11 @@ class TestStoreAPI:
 @pytest.mark.asyncio
 class TestObjectsAPI:
     async def _create_resource(self, client, subject_id="sub-030", session_id=None):
-        r1 = await client.post("/bidsweb/v1/subjects", json={"subject_id": subject_id})
+        r1 = await client.post("/api/subjects", json={"subject_id": subject_id})
         assert r1.status_code == 201, f"Subject creation failed: {r1.status_code}"
         # Create session if specified
         if session_id:
-            await client.post("/bidsweb/v1/sessions", json={
+            await client.post("/api/sessions", json={
                 "session_id": session_id,
                 "subject_id": subject_id,
             })
@@ -178,7 +178,7 @@ class TestObjectsAPI:
         if session_id:
             data["session_id"] = session_id
         resp = await client.post(
-            "/bidsweb/v1/store",
+            "/api/store",
             data=data,
             files={"file": ("test_T1w.nii.gz", b"test data content", "application/gzip")},
         )
@@ -187,29 +187,29 @@ class TestObjectsAPI:
 
     async def test_download_object(self, client):
         rid = await self._create_resource(client)
-        resp = await client.get(f"/bidsweb/v1/objects/{rid}")
+        resp = await client.get(f"/api/objects/{rid}")
         assert resp.status_code == 200, f"Download failed: {resp.status_code} rid={rid}"
         assert resp.content == b"test data content"
 
     async def test_get_metadata(self, client):
         rid = await self._create_resource(client)
-        resp = await client.get(f"/bidsweb/v1/objects/{rid}/metadata")
+        resp = await client.get(f"/api/objects/{rid}/metadata")
         assert resp.status_code == 200
 
     async def test_delete_object(self, client):
         rid = await self._create_resource(client, "sub-031")
-        resp = await client.delete(f"/bidsweb/v1/objects/{rid}")
+        resp = await client.delete(f"/api/objects/{rid}")
         assert resp.status_code == 200
         assert resp.json()["deleted"] is True
 
     async def test_get_nonexistent_object(self, client):
-        resp = await client.get("/bidsweb/v1/objects/res-nonexistent")
+        resp = await client.get("/api/objects/res-nonexistent")
         assert resp.status_code == 404
 
     async def test_stream_with_range(self, client):
         rid = await self._create_resource(client, "sub-032")
         resp = await client.get(
-            f"/bidsweb/v1/objects/{rid}/stream",
+            f"/api/objects/{rid}/stream",
             headers={"Range": "bytes=0-4"},
         )
         assert resp.status_code == 206
@@ -219,9 +219,9 @@ class TestObjectsAPI:
 @pytest.mark.asyncio
 class TestLabelsAPI:
     async def _create_resource(self, client, subject_id="sub-040"):
-        await client.post("/bidsweb/v1/subjects", json={"subject_id": subject_id})
+        await client.post("/api/subjects", json={"subject_id": subject_id})
         resp = await client.post(
-            "/bidsweb/v1/store",
+            "/api/store",
             data={"subject_id": subject_id, "modality": "anat"},
             files={"file": ("test_T1w.nii.gz", b"data", "application/gzip")},
         )
@@ -229,7 +229,7 @@ class TestLabelsAPI:
 
     async def test_set_labels(self, client):
         rid = await self._create_resource(client)
-        resp = await client.put(f"/bidsweb/v1/labels/{rid}", json={
+        resp = await client.put(f"/api/labels/{rid}", json={
             "labels": {"diagnosis": "tumor", "grade": "2"},
         })
         assert resp.status_code == 200
@@ -239,11 +239,11 @@ class TestLabelsAPI:
     async def test_patch_labels(self, client):
         rid = await self._create_resource(client, "sub-041")
         # Set initial
-        await client.put(f"/bidsweb/v1/labels/{rid}", json={
+        await client.put(f"/api/labels/{rid}", json={
             "labels": {"a": "1", "b": "2"},
         })
         # Patch
-        resp = await client.patch(f"/bidsweb/v1/labels/{rid}", json={
+        resp = await client.patch(f"/api/labels/{rid}", json={
             "add": {"c": "3"},
             "remove": ["a"],
         })
@@ -254,10 +254,10 @@ class TestLabelsAPI:
 
     async def test_get_labels(self, client):
         rid = await self._create_resource(client, "sub-042")
-        await client.put(f"/bidsweb/v1/labels/{rid}", json={
+        await client.put(f"/api/labels/{rid}", json={
             "labels": {"test": "value"},
         })
-        resp = await client.get(f"/bidsweb/v1/labels/{rid}")
+        resp = await client.get(f"/api/labels/{rid}")
         assert resp.status_code == 200
         # DB labels endpoint returns list of dicts with tag_key
         labels = resp.json()
@@ -265,10 +265,10 @@ class TestLabelsAPI:
 
     async def test_list_all_tags(self, client):
         rid = await self._create_resource(client, "sub-043")
-        await client.put(f"/bidsweb/v1/labels/{rid}", json={
+        await client.put(f"/api/labels/{rid}", json={
             "labels": {"diagnosis": "tumor"},
         })
-        resp = await client.get("/bidsweb/v1/labels")
+        resp = await client.get("/api/labels")
         assert resp.status_code == 200
         assert isinstance(resp.json(), list)
 
@@ -276,9 +276,9 @@ class TestLabelsAPI:
 @pytest.mark.asyncio
 class TestAnnotationsAPI:
     async def _create_resource(self, client):
-        await client.post("/bidsweb/v1/subjects", json={"subject_id": "sub-050"})
+        await client.post("/api/subjects", json={"subject_id": "sub-050"})
         resp = await client.post(
-            "/bidsweb/v1/store",
+            "/api/store",
             data={"subject_id": "sub-050", "modality": "anat"},
             files={"file": ("test.nii.gz", b"data", "application/gzip")},
         )
@@ -286,7 +286,7 @@ class TestAnnotationsAPI:
 
     async def test_create_annotation(self, client):
         rid = await self._create_resource(client)
-        resp = await client.post("/bidsweb/v1/annotations", json={
+        resp = await client.post("/api/annotations", json={
             "resource_id": rid,
             "ann_type": "bbox",
             "label": "tumor",
@@ -301,12 +301,12 @@ class TestAnnotationsAPI:
 
     async def test_list_annotations(self, client):
         rid = await self._create_resource(client)
-        await client.post("/bidsweb/v1/annotations", json={
+        await client.post("/api/annotations", json={
             "resource_id": rid,
             "ann_type": "point",
             "data": {"x": 100, "y": 200},
         })
-        resp = await client.get(f"/bidsweb/v1/annotations?resource_id={rid}")
+        resp = await client.get(f"/api/annotations?resource_id={rid}")
         assert resp.status_code == 200
         assert len(resp.json()) >= 1
 
@@ -314,9 +314,9 @@ class TestAnnotationsAPI:
 @pytest.mark.asyncio
 class TestQueryAPI:
     async def _setup_data(self, client):
-        await client.post("/bidsweb/v1/subjects", json={"subject_id": "sub-060"})
+        await client.post("/api/subjects", json={"subject_id": "sub-060"})
         await client.post(
-            "/bidsweb/v1/store",
+            "/api/store",
             data={
                 "subject_id": "sub-060",
                 "modality": "anat",
@@ -325,7 +325,7 @@ class TestQueryAPI:
             files={"file": ("T1w.nii.gz", b"data1", "application/gzip")},
         )
         await client.post(
-            "/bidsweb/v1/store",
+            "/api/store",
             data={
                 "subject_id": "sub-060",
                 "modality": "func",
@@ -336,7 +336,7 @@ class TestQueryAPI:
 
     async def test_query_by_subject(self, client):
         await self._setup_data(client)
-        resp = await client.post("/bidsweb/v1/query", json={
+        resp = await client.post("/api/query", json={
             "subject_id": "sub-060",
         })
         assert resp.status_code == 200
@@ -344,7 +344,7 @@ class TestQueryAPI:
 
     async def test_query_by_modality(self, client):
         await self._setup_data(client)
-        resp = await client.post("/bidsweb/v1/query", json={
+        resp = await client.post("/api/query", json={
             "modality": ["anat"],
         })
         assert resp.status_code == 200
@@ -353,7 +353,7 @@ class TestQueryAPI:
 
     async def test_query_by_label(self, client):
         await self._setup_data(client)
-        resp = await client.post("/bidsweb/v1/query", json={
+        resp = await client.post("/api/query", json={
             "labels": {"match": ["tumor"]},
         })
         assert resp.status_code == 200
@@ -363,7 +363,7 @@ class TestQueryAPI:
 @pytest.mark.asyncio
 class TestModalitiesAPI:
     async def test_list_modalities(self, client):
-        resp = await client.get("/bidsweb/v1/modalities")
+        resp = await client.get("/api/modalities")
         assert resp.status_code == 200
         modalities = resp.json()
         assert len(modalities) > 0
@@ -373,7 +373,7 @@ class TestModalitiesAPI:
         assert "func" in mod_ids
 
     async def test_register_custom_modality(self, client):
-        resp = await client.post("/bidsweb/v1/modalities", json={
+        resp = await client.post("/api/modalities", json={
             "modality_id": "custom_imaging",
             "directory": "custom_imaging",
             "description": "Custom imaging data",
@@ -388,14 +388,14 @@ class TestModalitiesAPI:
 class TestVerifyAPI:
     async def test_verify_all(self, client):
         # Create some data
-        await client.post("/bidsweb/v1/subjects", json={"subject_id": "sub-070"})
+        await client.post("/api/subjects", json={"subject_id": "sub-070"})
         await client.post(
-            "/bidsweb/v1/store",
+            "/api/store",
             data={"subject_id": "sub-070", "modality": "anat"},
             files={"file": ("test.nii.gz", b"data", "application/gzip")},
         )
 
-        resp = await client.post("/bidsweb/v1/verify", json={
+        resp = await client.post("/api/verify", json={
             "target": "all",
             "check_hash": False,
         })
@@ -408,7 +408,7 @@ class TestVerifyAPI:
 @pytest.mark.asyncio
 class TestRebuildAPI:
     async def test_rebuild_database(self, client):
-        resp = await client.post("/bidsweb/v1/rebuild", json={
+        resp = await client.post("/api/rebuild", json={
             "target": "all",
             "clear_existing": False,
         })
@@ -421,7 +421,7 @@ class TestRebuildAPI:
 @pytest.mark.asyncio
 class TestTasksAPI:
     async def test_create_task(self, client):
-        resp = await client.post("/bidsweb/v1/tasks", json={
+        resp = await client.post("/api/tasks", json={
             "action": "validate",
             "params": {"target": "all"},
         })
@@ -431,21 +431,21 @@ class TestTasksAPI:
         assert data["status"] == "queued"
 
     async def test_get_task(self, client):
-        resp = await client.post("/bidsweb/v1/tasks", json={"action": "test"})
+        resp = await client.post("/api/tasks", json={"action": "test"})
         task_id = resp.json()["task_id"]
-        resp = await client.get(f"/bidsweb/v1/tasks/{task_id}")
+        resp = await client.get(f"/api/tasks/{task_id}")
         assert resp.status_code == 200
         assert resp.json()["task_id"] == task_id
 
     async def test_list_tasks(self, client):
-        resp = await client.get("/bidsweb/v1/tasks")
+        resp = await client.get("/api/tasks")
         assert resp.status_code == 200
 
 
 @pytest.mark.asyncio
 class TestWebhooksAPI:
     async def test_create_webhook(self, client):
-        resp = await client.post("/bidsweb/v1/webhooks", json={
+        resp = await client.post("/api/webhooks", json={
             "name": "test-webhook",
             "url": "https://example.com/hook",
             "events": ["resource.created", "label.updated"],
@@ -456,14 +456,14 @@ class TestWebhooksAPI:
         assert data["url"] == "https://example.com/hook"
 
     async def test_list_webhooks(self, client):
-        resp = await client.get("/bidsweb/v1/webhooks")
+        resp = await client.get("/api/webhooks")
         assert resp.status_code == 200
 
     async def test_delete_webhook(self, client):
-        resp = await client.post("/bidsweb/v1/webhooks", json={
+        resp = await client.post("/api/webhooks", json={
             "url": "https://example.com/hook2",
             "events": ["*"],
         })
         wh_id = resp.json()["webhook_id"]
-        resp = await client.delete(f"/bidsweb/v1/webhooks/{wh_id}")
+        resp = await client.delete(f"/api/webhooks/{wh_id}")
         assert resp.status_code == 200

@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from vna_main.models.database import get_session
 from vna_main.services.project_service import ProjectService
-from vna_main.api.responses import PaginatedResponse
+from vna_common.responses import PaginatedResponse
 from vna_main.services.audit_service import AuditService
 
 router = APIRouter(prefix="/projects", tags=["projects"])

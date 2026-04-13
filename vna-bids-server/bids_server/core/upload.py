@@ -1,4 +1,5 @@
 """Chunked upload management for large files."""
+import asyncio
 import json
 import os
 import shutil
@@ -71,7 +72,7 @@ class UploadManager:
 
     async def write_chunk(self, upload_id: str, chunk_index: int, data: bytes) -> dict:
         """Write a chunk to the upload session."""
-        state = self._get_state(upload_id)
+        state = await self._get_state(upload_id)
         if state["status"] != "uploading":
             raise ValueError(f"Upload {upload_id} is {state['status']}, not uploading")
 
@@ -89,7 +90,7 @@ class UploadManager:
 
     async def complete_upload(self, upload_id: str) -> dict:
         """Assemble chunks into final file and return state."""
-        state = self._get_state(upload_id)
+        state = await self._get_state(upload_id)
         upload_dir = self._upload_dir(upload_id)
 
         # Verify all chunks received
@@ -117,13 +118,13 @@ class UploadManager:
 
     async def get_status(self, upload_id: str) -> dict:
         """Get upload status."""
-        return self._get_state(upload_id)
+        return await self._get_state(upload_id)
 
     async def cancel_upload(self, upload_id: str) -> bool:
         """Cancel and clean up an upload."""
         upload_dir = self._upload_dir(upload_id)
         if upload_dir.exists():
-            shutil.rmtree(str(upload_dir))
+            await asyncio.to_thread(shutil.rmtree, str(upload_dir))
         if upload_id in self._uploads:
             del self._uploads[upload_id]
         return True
@@ -132,19 +133,19 @@ class UploadManager:
         """Clean up temp files after successful processing."""
         upload_dir = self._upload_dir(upload_id)
         if upload_dir.exists():
-            shutil.rmtree(str(upload_dir))
+            await asyncio.to_thread(shutil.rmtree, str(upload_dir))
         if upload_id in self._uploads:
             del self._uploads[upload_id]
 
-    def _get_state(self, upload_id: str) -> dict:
+    async def _get_state(self, upload_id: str) -> dict:
         """Get upload state from memory or disk."""
         if upload_id in self._uploads:
             return self._uploads[upload_id]
 
         state_path = self._upload_dir(upload_id) / "state.json"
-        if state_path.exists():
-            with open(state_path) as f:
-                state = json.load(f)
+        if await asyncio.to_thread(state_path.exists):
+            async with aiofiles.open(state_path) as f:
+                state = json.loads(await f.read())
             self._uploads[upload_id] = state
             return state
 

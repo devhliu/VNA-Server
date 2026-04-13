@@ -6,7 +6,7 @@
 #   Orthanc Web UI:     http://localhost:8042
 #   Orthanc DICOM:      localhost:4242
 #   Orthanc DICOMweb:   http://localhost:8042/dicom-web/
-#   BIDS Server API:    http://localhost:8080/bidsweb/v1/
+#   BIDS Server API:    http://localhost:8080/api/
 #   BIDS Server Docs:   http://localhost:8080/docs
 #   PostgreSQL:         localhost:5432
 

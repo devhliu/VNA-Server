@@ -33,7 +33,7 @@ from bids_server.core.webhook_manager import webhook_manager
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/bidsweb/v1/objects", tags=["Objects"])
+router = APIRouter(prefix="/api/objects", tags=["Objects"])
 
 
 @router.get("/{resource_id}")
