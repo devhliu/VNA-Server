@@ -1,4 +1,4 @@
-# VNA (Visual Neuroscience Archive)
+# VNA (Vendor Neutral Archive)
 
 A multi-service DICOM/BIDS archive system for medical imaging research data management.
 
