@@ -1,0 +1,40 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: bids
+      POSTGRES_PASSWORD: bids
+      POSTGRES_DB: bidsserver
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bids -d bidsserver"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  bids-server:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://bids:bids@postgres:5432/bidsserver
+      BIDS_ROOT: /bids_data
+      UPLOAD_TEMP_DIR: /tmp/bids_uploads
+      DEBUG: "false"
+    volumes:
+      - bids_data:/bids_data
+      - bids_uploads:/tmp/bids_uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pg_data:
+  bids_data:
+  bids_uploads:

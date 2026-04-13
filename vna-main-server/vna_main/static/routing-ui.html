@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VNA 路由规则配置</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f7fa; color: #333; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        h1 { margin-bottom: 20px; color: #2c3e50; }
+        .card { background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .card-header { padding: 15px 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+        .card-body { padding: 20px; }
+        .btn { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; transition: all 0.2s; }
+        .btn-primary { background: #3498db; color: white; }
+        .btn-primary:hover { background: #2980b9; }
+        .btn-success { background: #27ae60; color: white; }
+        .btn-success:hover { background: #229954; }
+        .btn-danger { background: #e74c3c; color: white; }
+        .btn-danger:hover { background: #c0392b; }
+        .btn-secondary { background: #95a5a6; color: white; }
+        .btn-secondary:hover { background: #7f8c8d; }
+        .btn-sm { padding: 4px 8px; font-size: 12px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: #f8f9fa; font-weight: 600; }
+        tr:hover { background: #f8f9fa; }
+        .badge { padding: 4px 8px; border-radius: 12px; font-size: 12px; font-weight: 500; }
+        .badge-success { background: #d4edda; color: #155724; }
+        .badge-secondary { background: #e2e3e5; color: #383d41; }
+        .badge-info { background: #d1ecf1; color: #0c5460; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; }
+        .modal.active { display: flex; justify-content: center; align-items: center; }
+        .modal-content { background: white; border-radius: 8px; width: 600px; max-height: 90vh; overflow-y: auto; }
+        .modal-header { padding: 15px 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+        .modal-body { padding: 20px; }
+        .modal-footer { padding: 15px 20px; border-top: 1px solid #eee; display: flex; justify-content: flex-end; gap: 10px; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: 500; }
+        .form-control { width: 100%; padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+        .form-control:focus { outline: none; border-color: #3498db; }
+        .condition-row { display: flex; gap: 10px; margin-bottom: 10px; align-items: center; }
+        .condition-row select, .condition-row input { flex: 1; }
+        .priority-input { width: 100px; }
+        .empty-state { text-align: center; padding: 40px; color: #7f8c8d; }
+        .loading { text-align: center; padding: 20px; }
+        .toast { position: fixed; bottom: 20px; right: 20px; padding: 12px 20px; border-radius: 4px; color: white; z-index: 2000; animation: slideIn 0.3s ease; }
+        .toast-success { background: #27ae60; }
+        .toast-error { background: #e74c3c; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔀 VNA 路由规则配置</h1>
+        
+        <div class="card">
+            <div class="card-header">
+                <h3>路由规则列表</h3>
+                <button class="btn btn-primary" onclick="openCreateModal()">+ 新建规则</button>
+            </div>
+            <div class="card-body">
+                <div id="rules-table">
+                    <div class="loading">加载中...</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h3>规则测试</h3>
+            </div>
+            <div class="card-body">
+                <div class="form-group">
+                    <label>测试数据 (JSON)</label>
+                    <textarea id="test-data" class="form-control" rows="5" placeholder='{"data_type": "dicom", "modality": "CT"}'></textarea>
+                </div>
+                <button class="btn btn-primary" onclick="testRouting()">测试路由</button>
+                <div id="test-result" style="margin-top: 15px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-title">新建规则</h3>
+                <button class="btn btn-secondary btn-sm" onclick="closeModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="rule-id">
+                <div class="form-group">
+                    <label>规则名称 *</label>
+                    <input type="text" id="rule-name" class="form-control" placeholder="例如: CT影像路由到DICOM">
+                </div>
+                <div class="form-group">
+                    <label>描述</label>
+                    <textarea id="rule-description" class="form-control" rows="2"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>规则类型</label>
+                    <select id="rule-type" class="form-control">
+                        <option value="data_type">数据类型</option>
+                        <option value="modality">成像模态</option>
+                        <option value="patient">患者属性</option>
+                        <option value="study">检查属性</option>
+                        <option value="custom">自定义</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>目标服务 *</label>
+                    <select id="rule-target" class="form-control">
+                        <option value="dicom">DICOM Server (Orthanc)</option>
+                        <option value="bids">BIDS Server</option>
+                        <option value="both">两者都存储</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>优先级 (数值越大优先级越高)</label>
+                    <input type="number" id="rule-priority" class="form-control priority-input" value="100">
+                </div>
+                <div class="form-group">
+                    <label>匹配条件</label>
+                    <div id="conditions-container"></div>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="addCondition()">+ 添加条件</button>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="rule-enabled" checked> 启用此规则
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal()">取消</button>
+                <button class="btn btn-success" onclick="saveRule()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/v1/routing';
+        let operators = [];
+        let ruleTypes = [];
+
+        async function init() {
+            await Promise.all([loadRules(), loadOperators(), loadRuleTypes()]);
+        }
+
+        async function loadRules() {
+            try {
+                const resp = await fetch(`${API_BASE}/rules`);
+                const data = await resp.json();
+                renderRules(data.rules);
+            } catch (e) {
+                document.getElementById('rules-table').innerHTML = '<div class="empty-state">加载失败</div>';
+            }
+        }
+
+        async function loadOperators() {
+            const resp = await fetch(`${API_BASE}/operators`);
+            const data = await resp.json();
+            operators = data.operators;
+        }
+
+        async function loadRuleTypes() {
+            const resp = await fetch(`${API_BASE}/types`);
+            const data = await resp.json();
+            ruleTypes = data.types;
+        }
+
+        function renderRules(rules) {
+            if (!rules.length) {
+                document.getElementById('rules-table').innerHTML = '<div class="empty-state">暂无路由规则，点击上方按钮创建</div>';
+                return;
+            }
+
+            const html = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>优先级</th>
+                            <th>名称</th>
+                            <th>类型</th>
+                            <th>目标</th>
+                            <th>状态</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rules.map(r => `
+                            <tr>
+                                <td>${r.priority}</td>
+                                <td>${escapeHtml(r.name)}</td>
+                                <td><span class="badge badge-info">${r.rule_type}</span></td>
+                                <td><span class="badge badge-${r.target === 'dicom' ? 'success' : r.target === 'bids' ? 'secondary' : 'info'}">${r.target}</span></td>
+                                <td><span class="badge ${r.enabled ? 'badge-success' : 'badge-secondary'}">${r.enabled ? '启用' : '禁用'}</span></td>
+                                <td>
+                                    <button class="btn btn-primary btn-sm" onclick="editRule(${r.id})">编辑</button>
+                                    <button class="btn btn-${r.enabled ? 'secondary' : 'success'} btn-sm" onclick="toggleRule(${r.id}, ${!r.enabled})">${r.enabled ? '禁用' : '启用'}</button>
+                                    <button class="btn btn-danger btn-sm" onclick="deleteRule(${r.id})">删除</button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+            document.getElementById('rules-table').innerHTML = html;
+        }
+
+        function openCreateModal() {
+            document.getElementById('modal-title').textContent = '新建规则';
+            document.getElementById('rule-id').value = '';
+            document.getElementById('rule-name').value = '';
+            document.getElementById('rule-description').value = '';
+            document.getElementById('rule-type').value = 'data_type';
+            document.getElementById('rule-target').value = 'dicom';
+            document.getElementById('rule-priority').value = '100';
+            document.getElementById('rule-enabled').checked = true;
+            document.getElementById('conditions-container').innerHTML = '';
+            document.getElementById('modal').classList.add('active');
+        }
+
+        async function editRule(id) {
+            try {
+                const resp = await fetch(`${API_BASE}/rules/${id}`);
+                const rule = await resp.json();
+                
+                document.getElementById('modal-title').textContent = '编辑规则';
+                document.getElementById('rule-id').value = rule.id;
+                document.getElementById('rule-name').value = rule.name;
+                document.getElementById('rule-description').value = rule.description || '';
+                document.getElementById('rule-type').value = rule.rule_type;
+                document.getElementById('rule-target').value = rule.target;
+                document.getElementById('rule-priority').value = rule.priority;
+                document.getElementById('rule-enabled').checked = rule.enabled;
+                
+                const container = document.getElementById('conditions-container');
+                container.innerHTML = '';
+                const conditions = rule.conditions?.rules || [];
+                conditions.forEach(c => addCondition(c.field, c.operator, c.value));
+                
+                document.getElementById('modal').classList.add('active');
+            } catch (e) {
+                showToast('加载规则失败', 'error');
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('modal').classList.remove('active');
+        }
+
+        function addCondition(field = '', operator = 'eq', value = '') {
+            const container = document.getElementById('conditions-container');
+            const div = document.createElement('div');
+            div.className = 'condition-row';
+            div.innerHTML = `
+                <input type="text" class="form-control" placeholder="字段名" value="${field}" data-type="field">
+                <select class="form-control" data-type="operator">
+                    ${operators.map(op => `<option value="${op.operator}" ${op.operator === operator ? 'selected' : ''}>${op.description}</option>`).join('')}
+                </select>
+                <input type="text" class="form-control" placeholder="值" value="${value}" data-type="value">
+                <button class="btn btn-danger btn-sm" onclick="this.parentElement.remove()">×</button>
+            `;
+            container.appendChild(div);
+        }
+
+        function getConditions() {
+            const rows = document.querySelectorAll('.condition-row');
+            const rules = [];
+            rows.forEach(row => {
+                const field = row.querySelector('[data-type="field"]').value.trim();
+                const operator = row.querySelector('[data-type="operator"]').value;
+                const value = row.querySelector('[data-type="value"]').value.trim();
+                if (field) {
+                    rules.push({ field, operator, value });
+                }
+            });
+            return { match: 'all', rules };
+        }
+
+        async function saveRule() {
+            const id = document.getElementById('rule-id').value;
+            const data = {
+                name: document.getElementById('rule-name').value,
+                description: document.getElementById('rule-description').value,
+                rule_type: document.getElementById('rule-type').value,
+                target: document.getElementById('rule-target').value,
+                priority: parseInt(document.getElementById('rule-priority').value) || 100,
+                enabled: document.getElementById('rule-enabled').checked,
+                conditions: getConditions(),
+            };
+
+            if (!data.name) {
+                showToast('请输入规则名称', 'error');
+                return;
+            }
+
+            try {
+                const url = id ? `${API_BASE}/rules/${id}` : `${API_BASE}/rules`;
+                const method = id ? 'PUT' : 'POST';
+                const resp = await fetch(url, {
+                    method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data),
+                });
+                
+                if (resp.ok) {
+                    showToast(id ? '规则已更新' : '规则已创建', 'success');
+                    closeModal();
+                    loadRules();
+                } else {
+                    showToast('保存失败', 'error');
+                }
+            } catch (e) {
+                showToast('保存失败', 'error');
+            }
+        }
+
+        async function toggleRule(id, enabled) {
+            try {
+                const resp = await fetch(`${API_BASE}/rules/${id}/toggle?enabled=${enabled}`, { method: 'POST' });
+                if (resp.ok) {
+                    showToast(enabled ? '规则已启用' : '规则已禁用', 'success');
+                    loadRules();
+                }
+            } catch (e) {
+                showToast('操作失败', 'error');
+            }
+        }
+
+        async function deleteRule(id) {
+            if (!confirm('确定要删除此规则吗？')) return;
+            
+            try {
+                const resp = await fetch(`${API_BASE}/rules/${id}`, { method: 'DELETE' });
+                if (resp.ok) {
+                    showToast('规则已删除', 'success');
+                    loadRules();
+                }
+            } catch (e) {
+                showToast('删除失败', 'error');
+            }
+        }
+
+        async function testRouting() {
+            const dataStr = document.getElementById('test-data').value.trim();
+            if (!dataStr) {
+                showToast('请输入测试数据', 'error');
+                return;
+            }
+
+            try {
+                const resourceData = JSON.parse(dataStr);
+                const resp = await fetch(`${API_BASE}/evaluate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(resourceData),
+                });
+                const result = await resp.json();
+                
+                document.getElementById('test-result').innerHTML = `
+                    <div class="card" style="margin-top: 10px;">
+                        <div class="card-body">
+                            <p><strong>路由目标:</strong> <span class="badge badge-success">${result.target || '无匹配规则'}</span></p>
+                            <p><strong>匹配规则:</strong></p>
+                            <ul>${result.matching_rules?.map(r => `<li>${r.name} (优先级: ${r.priority})</li>`).join('') || '<li>无</li>'}</ul>
+                        </div>
+                    </div>
+                `;
+            } catch (e) {
+                showToast('JSON 格式错误', 'error');
+            }
+        }
+
+        function showToast(message, type = 'success') {
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        function escapeHtml(str) {
+            return str?.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') || '';
+        }
+
+        init();
+    </script>
+</body>
+</html>

@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dicom-server-sdk"
+version = "0.1.0"
+description = "Production-grade Python SDK for Orthanc-compatible DICOMweb servers"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+dependencies = [
+    "httpx>=0.27.0",
+    "click>=8.1.0",
+    "pydantic>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+]
+
+[project.scripts]
+dicom-cli = "dicom_sdk.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["dicom_sdk*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

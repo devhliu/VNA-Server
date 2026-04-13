@@ -1,0 +1,12 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bids-server"
+version = "1.0.0"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.setuptools.packages.find]
+include = ["bids_server*"]

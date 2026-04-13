@@ -1,0 +1,43 @@
+{
+  "Name": "VNA-DICOM",
+  "DicomAet": "VNA-ORTHANC",
+  "RemoteAccessAllowed": true,
+  "AuthenticationEnabled": true,
+  "_comment_RegisteredUsers": "Credentials are injected at container startup via ORTHANC__REGISTERED_USERS env var in docker-compose.yml. The placeholder below should be overridden.",
+  "RegisteredUsers": {
+    "PLACEHOLDER_USER": "PLACEHOLDER_PASSWORD"
+  },
+  "DicomWeb": {
+    "Enable": true,
+    "Root": "/dicom-web/"
+  },
+  "OHIF": {
+    "Datasource": "dicom-web"
+  },
+  "RestApiEnabled": true,
+  "StableAge": 60,
+  "StorageCompression": false,
+  "LuaScripts": ["/etc/orthanc/lua/sync_to_vna.lua"],
+  "HttpTimeout": 30,
+  "OrthancPeers": {},
+  "DefaultEncoding": "Latin1",
+  "Plugins": [
+    "/usr/share/orthanc/plugins"
+  ],
+  "OrthancExplorer2": {
+    "Enable": true,
+    "IsDefaultOrthancUI": true
+  },
+  "_comment_PostgreSQL": "Username and Password should be set via environment variables at container startup. See docker-compose.yml and .env for actual values.",
+  "PostgreSQL": {
+    "EnableIndex": true,
+    "EnableStorage": true,
+    "Host": "postgres",
+    "Port": 5432,
+    "Database": "orthanc",
+    "Username": "PLACEHOLDER_PG_USER",
+    "Password": "PLACEHOLDER_PG_PASSWORD",
+    "Lock": false,
+    "EnableSsl": false
+  }
+}

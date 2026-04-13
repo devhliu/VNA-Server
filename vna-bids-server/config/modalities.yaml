@@ -1,0 +1,107 @@
+# BIDS Server - Modality Definitions
+# Add new modalities here to extend supported data types
+
+modalities:
+  anat:
+    directory: anat
+    description: Structural MRI
+    extensions: [".nii.gz", ".nii", ".json"]
+    category: imaging
+
+  func:
+    directory: func
+    description: Functional MRI
+    extensions: [".nii.gz", ".nii", ".json", ".tsv"]
+    category: imaging
+
+  dwi:
+    directory: dwi
+    description: Diffusion Weighted Imaging
+    extensions: [".nii.gz", ".nii", ".json", ".bval", ".bvec"]
+    category: imaging
+
+  fmap:
+    directory: fmap
+    description: Field Maps
+    extensions: [".nii.gz", ".nii", ".json"]
+    category: imaging
+
+  ct:
+    directory: ct
+    description: CT Imaging
+    extensions: [".nii.gz", ".nii", ".json"]
+    category: imaging
+
+  pet:
+    directory: pet
+    description: PET Imaging
+    extensions: [".nii.gz", ".nii", ".json", ".tsv"]
+    category: imaging
+
+  microscopy:
+    directory: microscopy
+    description: Microscopy Images
+    extensions: [".ome.tiff", ".tiff", ".tif", ".json"]
+    category: imaging
+
+  eeg:
+    directory: eeg
+    description: Electroencephalography
+    extensions: [".edf", ".bdf", ".set", ".fdt", ".json", ".tsv"]
+    category: electrophysiology
+
+  meg:
+    directory: meg
+    description: Magnetoencephalography
+    extensions: [".fif", ".ds", ".json", ".tsv"]
+    category: electrophysiology
+
+  ieeg:
+    directory: ieeg
+    description: Intracranial EEG
+    extensions: [".edf", ".nwb", ".json", ".tsv"]
+    category: electrophysiology
+
+  nirs:
+    directory: nirs
+    description: Near-Infrared Spectroscopy
+    extensions: [".snirf", ".json", ".tsv"]
+    category: electrophysiology
+
+  docs:
+    directory: docs
+    description: Documents (reports, referrals, notes)
+    extensions: [".pdf", ".docx", ".doc", ".txt", ".html", ".json"]
+    category: document
+
+  tables:
+    directory: tables
+    description: Tabular Data
+    extensions: [".csv", ".tsv", ".xlsx", ".xls", ".json"]
+    category: table
+
+  code:
+    directory: code
+    description: Code and Scripts
+    extensions: [".py", ".sh", ".r", ".ipynb", ".json"]
+    category: code
+
+  models:
+    directory: models
+    description: Model Weights and Architectures
+    extensions: [".pth", ".h5", ".onnx", ".pt", ".json"]
+    category: model
+
+  raw:
+    directory: raw
+    description: Raw Non-standard Data
+    extensions: [".*"]  # any extension
+    requires_sidecar: true
+    category: raw
+
+  other:
+    directory: other
+    description: Other Custom Data
+    extensions: [".*"]  # any extension
+    requires_sidecar: true
+    category: other

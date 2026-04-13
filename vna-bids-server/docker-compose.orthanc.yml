@@ -1,0 +1,46 @@
+# Orthanc DICOM Server - Docker Compose
+# 使用 orthancteam/orthanc:26.1.0 (官方团队镜像)
+#
+# 启动: docker compose -f docker-compose.orthanc.yml up -d
+# 访问: http://localhost:8042 (Web UI)
+# DICOM: 端口 4242 (C-STORE), 8042 (DICOMweb + REST)
+
+version: "3.8"
+
+services:
+  orthanc:
+    image: orthancteam/orthanc:26.1.0
+    ports:
+      - "4242:4242"    # DICOM 协议端口
+      - "8042:8042"    # HTTP API + Web UI
+    environment:
+      # Orthanc 配置（通过环境变量）
+      ORTHANC__NAME: "VNA-DICOM-Server"
+      ORTHANC__AUTHENTICATION_ENABLED: "false"
+      ORTHANC__STORAGE_DIRECTORY: "/var/lib/orthanc/db"
+      ORTHANC__INDEX_DIRECTORY: "/var/lib/orthanc/db"
+      
+      # DICOM 配置
+      ORTHANC__DICOM_AET: "VNA-ORTHANC"
+      ORTHANC__DICOM_ALWAYS_STORE: "true"
+      
+      # REST API
+      ORTHANC__REST_API_ENABLED: "true"
+      ORTHANC__EXPOSE_HTTP: "true"
+      
+      # DICOMweb 支持（BIDS Server 集成需要）
+      ORTHANC__DICOM_WEB__ENABLED: "true"
+      
+      # 存储限制（不限制）
+      ORTHANC__MAXIMUM_STORAGE_SIZE: "0"
+      ORTHANC__MAXIMUM_PATIENT_COUNT: "0"
+      
+      # 日志
+      ORTHANC__VERBOSE: "true"
+
+    volumes:
+      - orthanc_data:/var/lib/orthanc/db
+    restart: unless-stopped
+
+volumes:
+  orthanc_data:
