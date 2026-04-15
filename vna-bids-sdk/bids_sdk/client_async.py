@@ -6,8 +6,15 @@ from typing import Any, Callable, Dict, List, Optional, Union
 
 import httpx
 
-from bids_sdk.client import _normalize_label_map, _raise_for_status
+from bids_sdk.client import (
+    _extract_items,
+    _label_response_items,
+    _normalize_hospital_ids,
+    _normalize_label_map,
+    _raise_for_status,
+)
 from bids_sdk.exceptions import (
+    BidsHTTPError,
     BidsConnectionError,
     BidsTimeoutError,
     BidsValidationError,
@@ -149,7 +156,6 @@ class AsyncBidsClient:
             raise BidsValidationError(f"File not found: {file_path}")
 
         file_size = path.stat().st_size
-        total_chunks = (file_size + chunk_size - 1) // chunk_size
 
         init_response = await self._request(
             "POST",
@@ -167,14 +173,16 @@ class AsyncBidsClient:
         )
         init_data = init_response.json()
         upload_id = init_data.get("upload_id", init_data.get("id"))
+        chunk_size = int(init_data.get("chunk_size", chunk_size))
+        total_chunks = int(init_data.get("total_chunks", (file_size + chunk_size - 1) // chunk_size))
 
         bytes_uploaded = 0
         with open(path, "rb") as f:
             for chunk_index in range(total_chunks):
                 chunk_data = f.read(chunk_size)
-                files = {"chunk": (f"chunk_{chunk_index}", chunk_data)}
+                files = {"file": (f"chunk_{chunk_index}", chunk_data)}
                 await self._request(
-                    "POST",
+                    "PATCH",
                     f"/api/store/{upload_id}",
                     data={"chunk_index": str(chunk_index)},
                     files=files,
@@ -299,25 +307,25 @@ class AsyncBidsClient:
         offset: Optional[int] = None,
     ) -> QueryResult:
         """Query resources with flexible filters."""
-        params: Dict[str, Any] = {}
+        body: Dict[str, Any] = {}
         if subject_id:
-            params["subject_id"] = subject_id
+            body["subject_id"] = subject_id
         if session_id:
-            params["session_id"] = session_id
+            body["session_id"] = session_id
         if modality:
-            params["modality"] = modality
+            body["modality"] = [modality]
         if labels:
-            params["labels"] = ",".join(labels)
+            body["labels"] = {"match": labels}
         if metadata:
-            params.update(metadata)
+            body["metadata"] = metadata
         if search:
-            params["search"] = search
+            body["search"] = search
         if limit is not None:
-            params["limit"] = limit
+            body["limit"] = limit
         if offset is not None:
-            params["offset"] = offset
+            body["offset"] = offset
 
-        response = await self._request("GET", "/api/query", params=params)
+        response = await self._request("POST", "/api/query", json=body)
         data = response.json()
         return QueryResult(**data) if isinstance(data, dict) else QueryResult(resources=[], total=0)
 
@@ -326,18 +334,18 @@ class AsyncBidsClient:
     # ------------------------------------------------------------------
 
     async def get_labels(self, resource_id: str) -> List[Dict[str, Any]]:
-        response = await self._request("GET", f"/api/objects/{resource_id}/labels")
-        return response.json()
+        response = await self._request("GET", f"/api/labels/{resource_id}")
+        return _label_response_items(response.json())
 
     async def set_labels(
         self, resource_id: str, labels: Union[List[str], Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
         response = await self._request(
             "PUT",
-            f"/api/objects/{resource_id}/labels",
+            f"/api/labels/{resource_id}",
             json={"labels": _normalize_label_map(labels)},
         )
-        return response.json()
+        return _label_response_items(response.json())
 
     async def patch_labels(
         self,
@@ -350,8 +358,8 @@ class AsyncBidsClient:
             body["add"] = _normalize_label_map(add)
         if remove:
             body["remove"] = remove
-        response = await self._request("PATCH", f"/api/objects/{resource_id}/labels", json=body)
-        return response.json()
+        response = await self._request("PATCH", f"/api/labels/{resource_id}", json=body)
+        return _label_response_items(response.json())
 
     async def list_all_tags(self) -> List[Dict[str, Any]]:
         response = await self._request("GET", "/api/labels")
@@ -371,11 +379,10 @@ class AsyncBidsClient:
     ) -> Annotation:
         body: Dict[str, Any] = {
             "resource_id": resource_id,
-            "type": ann_type,
+            "ann_type": ann_type,
             "label": label,
+            "data": data or {},
         }
-        if data is not None:
-            body["data"] = data
         if confidence is not None:
             body["confidence"] = confidence
         response = await self._request("POST", "/api/annotations", json=body)
@@ -402,7 +409,7 @@ class AsyncBidsClient:
         if patient_ref is not None:
             body["patient_ref"] = patient_ref
         if hospital_ids is not None:
-            body["hospital_ids"] = hospital_ids
+            body["hospital_ids"] = _normalize_hospital_ids(hospital_ids)
         response = await self._request("POST", "/api/subjects", json=body)
         return Subject(**response.json())
 
@@ -413,9 +420,7 @@ class AsyncBidsClient:
     async def list_subjects(self) -> List[Subject]:
         response = await self._request("GET", "/api/subjects")
         data = response.json()
-        if isinstance(data, list):
-            return [Subject(**s) for s in data]
-        return []
+        return [Subject(**s) for s in _extract_items(data)]
 
     async def create_session(
         self,
@@ -438,9 +443,7 @@ class AsyncBidsClient:
             params["subject_id"] = subject_id
         response = await self._request("GET", "/api/sessions", params=params)
         data = response.json()
-        if isinstance(data, list):
-            return [Session(**s) for s in data]
-        return []
+        return [Session(**s) for s in _extract_items(data)]
 
     # ------------------------------------------------------------------
     # Tasks
@@ -465,9 +468,9 @@ class AsyncBidsClient:
         response = await self._request("GET", f"/api/tasks/{task_id}")
         return Task(**response.json())
 
-    async def cancel_task(self, task_id: str) -> Task:
-        response = await self._request("POST", f"/api/tasks/{task_id}/cancel")
-        return Task(**response.json())
+    async def cancel_task(self, task_id: str) -> Dict[str, Any]:
+        response = await self._request("DELETE", f"/api/tasks/{task_id}")
+        return response.json()
 
     # ------------------------------------------------------------------
     # Webhooks
@@ -491,9 +494,7 @@ class AsyncBidsClient:
     async def list_webhooks(self) -> List[Webhook]:
         response = await self._request("GET", "/api/webhooks")
         data = response.json()
-        if isinstance(data, list):
-            return [Webhook(**w) for w in data]
-        return []
+        return [Webhook(**w) for w in _extract_items(data)]
 
     async def delete_webhook(self, webhook_id: str) -> None:
         await self._request("DELETE", f"/api/webhooks/{webhook_id}")
@@ -506,11 +507,10 @@ class AsyncBidsClient:
         self,
         target: Optional[str] = None,
         check_hash: bool = True,
+        repair: bool = False,
     ) -> Dict[str, Any]:
-        params: Dict[str, Any] = {"check_hash": str(check_hash).lower()}
-        if target:
-            params["target"] = target
-        response = await self._request("GET", "/api/verify", params=params)
+        body: Dict[str, Any] = {"target": target or "all", "check_hash": check_hash, "repair": repair}
+        response = await self._request("POST", "/api/verify", json=body)
         return response.json()
 
     async def rebuild(
@@ -582,5 +582,4 @@ class AsyncBidsClient:
 
     async def get_statistics(self) -> Dict[str, Any]:
         """Get server statistics."""
-        response = await self._request("GET", "/api/statistics")
-        return response.json()
+        raise BidsHTTPError("The current BIDS server does not expose /api/statistics.")

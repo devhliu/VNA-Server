@@ -33,6 +33,7 @@ from dicom_sdk.models import (
 )
 
 logger = logging.getLogger(__name__)
+_DICOMWEB_PREFIX = "/dicom-web"
 
 
 def _raise_for_status(response: httpx.Response) -> None:
@@ -64,6 +65,90 @@ def _safe_int(value: Any) -> Optional[int]:
         return int(value)
     except (ValueError, TypeError):
         return None
+
+
+def _tag_value(item: dict[str, Any], *keys: str) -> Any:
+    for key in keys:
+        value = item.get(key)
+        if isinstance(value, dict):
+            nested = value.get("Value")
+            if isinstance(nested, list) and nested:
+                return nested[0]
+            if nested is not None:
+                return nested
+            if "Alphabetic" in value:
+                return value.get("Alphabetic")
+        elif value is not None:
+            return value
+    return None
+
+
+def _qido_to_query_result(item: dict[str, Any]) -> QueryResult:
+    return QueryResult(
+        study_instance_uid=_tag_value(item, "StudyInstanceUID", "0020000D"),
+        patient_id=_tag_value(item, "PatientID", "00100020"),
+        patient_name=_tag_value(item, "PatientName", "00100010"),
+        study_date=_tag_value(item, "StudyDate", "00080020"),
+        study_description=_tag_value(item, "StudyDescription", "00081030"),
+        accession_number=_tag_value(item, "AccessionNumber", "00080050"),
+        modalities_in_study=_tag_value(item, "ModalitiesInStudy", "00080061"),
+        number_of_study_related_series=_safe_int(_tag_value(item, "NumberOfStudyRelatedSeries", "00201206")),
+        number_of_study_related_instances=_safe_int(_tag_value(item, "NumberOfStudyRelatedInstances", "00201208")),
+    )
+
+
+def _qido_to_study(item: dict[str, Any]) -> StudyMetadata:
+    return StudyMetadata(
+        study_instance_uid=_tag_value(item, "StudyInstanceUID", "0020000D") or "",
+        patient_id=_tag_value(item, "PatientID", "00100020"),
+        patient_name=_tag_value(item, "PatientName", "00100010"),
+        study_date=_tag_value(item, "StudyDate", "00080020"),
+        study_description=_tag_value(item, "StudyDescription", "00081030"),
+        accession_number=_tag_value(item, "AccessionNumber", "00080050"),
+        modalities_in_study=_tag_value(item, "ModalitiesInStudy", "00080061"),
+        institution_name=_tag_value(item, "InstitutionName", "00080080"),
+        referring_physician=_tag_value(item, "ReferringPhysicianName", "00080090"),
+        number_of_series=_safe_int(_tag_value(item, "NumberOfStudyRelatedSeries", "00201206")),
+        number_of_instances=_safe_int(_tag_value(item, "NumberOfStudyRelatedInstances", "00201208")),
+        raw_tags=item,
+    )
+
+
+def _qido_to_series(item: dict[str, Any], study_uid: Optional[str] = None) -> SeriesMetadata:
+    return SeriesMetadata(
+        study_instance_uid=study_uid or _tag_value(item, "StudyInstanceUID", "0020000D"),
+        series_instance_uid=_tag_value(item, "SeriesInstanceUID", "0020000E") or "",
+        series_number=_safe_int(_tag_value(item, "SeriesNumber", "00200011")),
+        modality=_tag_value(item, "Modality", "00080060"),
+        series_description=_tag_value(item, "SeriesDescription", "0008103E"),
+        body_part_examined=_tag_value(item, "BodyPartExamined", "00180015"),
+        number_of_instances=_safe_int(_tag_value(item, "NumberOfSeriesRelatedInstances", "00201209")),
+        raw_tags=item,
+    )
+
+
+def _metadata_to_instance(item: dict[str, Any]) -> InstanceMetadata:
+    return InstanceMetadata(
+        study_instance_uid=_tag_value(item, "StudyInstanceUID", "0020000D"),
+        series_instance_uid=_tag_value(item, "SeriesInstanceUID", "0020000E"),
+        sop_instance_uid=_tag_value(item, "SOPInstanceUID", "00080018") or "",
+        sop_class_uid=_tag_value(item, "SOPClassUID", "00080016"),
+        instance_number=_safe_int(_tag_value(item, "InstanceNumber", "00200013")),
+        rows=_safe_int(_tag_value(item, "Rows", "00280010")),
+        columns=_safe_int(_tag_value(item, "Columns", "00280011")),
+        bits_allocated=_safe_int(_tag_value(item, "BitsAllocated", "00280100")),
+        photometric_interpretation=_tag_value(item, "PhotometricInterpretation", "00280004"),
+        raw_tags=item,
+    )
+
+
+def _multipart_dicom_payload(data: bytes) -> tuple[bytes, str]:
+    boundary = "dicom-sdk-boundary"
+    body = (
+        f"--{boundary}\r\n"
+        'Content-Type: application/dicom\r\n\r\n'
+    ).encode() + data + f"\r\n--{boundary}--\r\n".encode()
+    return body, f'multipart/related; type="application/dicom"; boundary={boundary}'
 
 
 def _parse_orthanc_study(data: dict[str, Any]) -> StudyMetadata:
@@ -203,17 +288,18 @@ class DicomClient:
         Returns:
             StoreResult with upload details.
         """
+        payload, content_type = _multipart_dicom_payload(data)
         response = self._request(
             "POST",
-            "/instances",
-            content=data,
-            headers={"Content-Type": "application/dicom"},
+            f"{_DICOMWEB_PREFIX}/studies",
+            content=payload,
+            headers={"Content-Type": content_type},
         )
         result_data = response.json()
         return StoreResult(
             success=True,
-            study_instance_uid=result_data.get("ParentStudy"),
-            sop_instance_uid=result_data.get("ID"),
+            study_instance_uid=result_data.get("StudyInstanceUID") or result_data.get("ParentStudy"),
+            sop_instance_uid=result_data.get("SOPInstanceUID") or result_data.get("ID"),
             status_code=response.status_code,
             message="Instance stored successfully",
         )
@@ -246,48 +332,36 @@ class DicomClient:
         Returns:
             List of QueryResult objects.
         """
-        # Use Orthanc tools/find endpoint for flexible queries
-        query_dict: dict[str, Any] = {"Level": level.capitalize(), "Limit": limit}
-        query_dict["Expand"] = True
-
-        filters: dict[str, str] = {}
+        params: dict[str, Any] = {"limit": limit}
         if study_uid:
-            filters["StudyInstanceUID"] = study_uid
+            params["StudyInstanceUID"] = study_uid
         if patient_id:
-            filters["PatientID"] = patient_id
+            params["PatientID"] = patient_id
         if patient_name:
-            filters["PatientName"] = patient_name
+            params["PatientName"] = patient_name
         if study_date:
-            filters["StudyDate"] = study_date
+            params["StudyDate"] = study_date
         if modality:
-            filters["Modality"] = modality
+            params["ModalitiesInStudy"] = modality
         if accession_number:
-            filters["AccessionNumber"] = accession_number
-        query_dict["Query"] = filters
+            params["AccessionNumber"] = accession_number
 
-        response = self._request("POST", "/tools/find", json=query_dict)
+        if level == "study":
+            path = f"{_DICOMWEB_PREFIX}/studies"
+        elif level == "series":
+            if not study_uid:
+                raise DicomValidationError("study_uid is required for series-level DICOMweb queries")
+            path = f"{_DICOMWEB_PREFIX}/studies/{study_uid}/series"
+        elif level == "instance":
+            raise DicomValidationError("Use query_instances() for instance-level DICOMweb queries")
+        else:
+            raise DicomValidationError(f"Unsupported query level: {level}")
+
+        response = self._request("GET", path, params=params)
         data = response.json()
 
         if isinstance(data, list):
-            return [
-                QueryResult(
-                    study_instance_uid=item.get("MainDicomTags", {}).get(
-                        "StudyInstanceUID", item.get("ID")
-                    ),
-                    patient_id=item.get("PatientMainDicomTags", {}).get("PatientID"),
-                    patient_name=item.get("PatientMainDicomTags", {}).get(
-                        "PatientName"
-                    ),
-                    study_date=item.get("MainDicomTags", {}).get("StudyDate"),
-                    study_description=item.get("MainDicomTags", {}).get(
-                        "StudyDescription"
-                    ),
-                    accession_number=item.get("MainDicomTags", {}).get(
-                        "AccessionNumber"
-                    ),
-                )
-                for item in data
-            ]
+            return [_qido_to_query_result(item) for item in data]
         return []
 
     # ─── WADO-RS: Retrieve ──────────────────────────────────────────
@@ -310,8 +384,8 @@ class DicomClient:
         Returns:
             List of DICOM file contents as bytes.
         """
-        headers = {"Accept": "application/dicom"}
-        parts = ["/studies", study_uid]
+        headers = {"Accept": 'multipart/related; type="application/dicom"'}
+        parts = [f"{_DICOMWEB_PREFIX}/studies", study_uid]
         if series_uid:
             parts.extend(["/series", series_uid])
         if instance_uid:
@@ -445,11 +519,15 @@ class DicomClient:
         Returns:
             StudyMetadata with full study information.
         """
-        orthanc_id = self._resolve_orthanc_id(study_uid)
-        if not orthanc_id:
+        results = self.query(study_uid=study_uid)
+        if not results:
             raise DicomNotFoundError(f"Study not found: {study_uid}")
-        response = self._request("GET", f"/{orthanc_id}")
-        return _parse_orthanc_study(response.json())
+        response = self._request(
+            "GET",
+            f"{_DICOMWEB_PREFIX}/studies",
+            params={"StudyInstanceUID": study_uid, "limit": 1},
+        )
+        return _qido_to_study(response.json()[0])
 
     def get_series(self, study_uid: str, series_uid: str) -> SeriesMetadata:
         """Get detailed series metadata.
@@ -461,11 +539,13 @@ class DicomClient:
         Returns:
             SeriesMetadata with full series information.
         """
-        orthanc_id = self._resolve_orthanc_id(study_uid, series_uid)
-        if not orthanc_id:
-            raise DicomNotFoundError(f"Series not found: {series_uid}")
-        response = self._request("GET", f"/{orthanc_id}")
-        return _parse_orthanc_series(response.json())
+        response = self._request("GET", f"{_DICOMWEB_PREFIX}/studies/{study_uid}/series")
+        items = response.json()
+        for item in items:
+            parsed = _qido_to_series(item, study_uid=study_uid)
+            if parsed.series_instance_uid == series_uid:
+                return parsed
+        raise DicomNotFoundError(f"Series not found: {series_uid}")
 
     def get_instance(
         self,
@@ -483,11 +563,14 @@ class DicomClient:
         Returns:
             InstanceMetadata with full instance information.
         """
-        orthanc_id = self._resolve_orthanc_id(study_uid, series_uid, sop_uid)
-        if not orthanc_id:
-            raise DicomNotFoundError(f"Instance not found: {sop_uid}")
-        response = self._request("GET", f"/{orthanc_id}")
-        return _parse_orthanc_instance(response.json())
+        response = self._request(
+            "GET",
+            f"{_DICOMWEB_PREFIX}/studies/{study_uid}/series/{series_uid}/instances/{sop_uid}/metadata",
+        )
+        items = response.json()
+        if isinstance(items, list) and items:
+            return _metadata_to_instance(items[0])
+        raise DicomNotFoundError(f"Instance not found: {sop_uid}")
 
     # ─── Render ─────────────────────────────────────────────────────
 
@@ -511,14 +594,10 @@ class DicomClient:
         Returns:
             Image bytes.
         """
-        orthanc_id = self._resolve_orthanc_id(study_uid, series_uid, instance_uid)
-        if not orthanc_id:
-            raise DicomNotFoundError(f"Instance not found: {instance_uid}")
-
         accept = f"image/{output_format}"
         response = self._request(
             "GET",
-            f"/{orthanc_id}/render",
+            f"{_DICOMWEB_PREFIX}/studies/{study_uid}/series/{series_uid}/instances/{instance_uid}/render",
             headers={"Accept": accept},
         )
         content = response.content
@@ -575,16 +654,8 @@ class DicomClient:
         Returns:
             List of StudyMetadata objects.
         """
-        response = self._request("GET", "/studies")
-        study_ids = response.json()
-        studies = []
-        for sid in study_ids:
-            try:
-                detail = self._request("GET", f"/{sid}")
-                studies.append(_parse_orthanc_study(detail.json()))
-            except DicomError:
-                continue
-        return studies
+        response = self._request("GET", f"{_DICOMWEB_PREFIX}/studies")
+        return [_qido_to_study(item) for item in response.json()]
 
     # ─── Batch Store ─────────────────────────────────────────────────
 
@@ -640,19 +711,22 @@ class DicomClient:
         Returns:
             PatientMetadata if found, None otherwise.
         """
-        try:
-            response = self._request("GET", f"/patients/{patient_id}")
-        except DicomNotFoundError:
+        response = self._request(
+            "GET",
+            f"{_DICOMWEB_PREFIX}/studies",
+            params={"PatientID": patient_id, "limit": 1},
+        )
+        items = response.json()
+        if not items:
             return None
-        data = response.json()
-        tags = data.get("PatientMainDicomTags", {})
+        item = items[0]
         return PatientMetadata(
-            patient_id=tags.get("PatientID"),
-            patient_name=tags.get("PatientName"),
-            patient_birth_date=tags.get("PatientBirthDate"),
-            patient_sex=tags.get("PatientSex"),
-            patient_age=tags.get("PatientAge"),
-            raw_tags=tags,
+            patient_id=_tag_value(item, "PatientID", "00100020"),
+            patient_name=_tag_value(item, "PatientName", "00100010"),
+            patient_birth_date=_tag_value(item, "PatientBirthDate", "00100030"),
+            patient_sex=_tag_value(item, "PatientSex", "00100040"),
+            patient_age=_tag_value(item, "PatientAge", "00101010"),
+            raw_tags=item,
         )
 
     def list_patients(self, limit: int = 100) -> list[PatientMetadata]:
@@ -664,16 +738,24 @@ class DicomClient:
         Returns:
             List of PatientMetadata objects.
         """
-        response = self._request("GET", "/patients")
-        patient_ids = response.json()
-        patients = []
-        for pid in patient_ids[:limit]:
-            try:
-                patient = self.get_patient(pid)
-                if patient:
-                    patients.append(patient)
-            except DicomError:
+        response = self._request("GET", f"{_DICOMWEB_PREFIX}/studies", params={"limit": limit})
+        patients: list[PatientMetadata] = []
+        seen: set[str] = set()
+        for item in response.json():
+            patient_id = _tag_value(item, "PatientID", "00100020")
+            if not patient_id or patient_id in seen:
                 continue
+            seen.add(patient_id)
+            patients.append(
+                PatientMetadata(
+                    patient_id=patient_id,
+                    patient_name=_tag_value(item, "PatientName", "00100010"),
+                    patient_birth_date=_tag_value(item, "PatientBirthDate", "00100030"),
+                    patient_sex=_tag_value(item, "PatientSex", "00100040"),
+                    patient_age=_tag_value(item, "PatientAge", "00101010"),
+                    raw_tags=item,
+                )
+            )
         return patients
 
     # ─── Series Query ─────────────────────────────────────────────────
@@ -700,26 +782,20 @@ class DicomClient:
         Returns:
             List of SeriesMetadata objects.
         """
-        query_dict: dict[str, Any] = {"Level": "Series", "Limit": limit, "Expand": True}
-        filters: dict[str, str] = {}
-        if study_uid:
-            filters["StudyInstanceUID"] = study_uid
+        if not study_uid:
+            raise DicomValidationError("study_uid is required for series DICOMweb queries")
+        params: dict[str, Any] = {"limit": limit}
         if series_uid:
-            filters["SeriesInstanceUID"] = series_uid
+            params["SeriesInstanceUID"] = series_uid
         if modality:
-            filters["Modality"] = modality
+            params["Modality"] = modality
         if series_description:
-            filters["SeriesDescription"] = series_description
+            params["SeriesDescription"] = series_description
         if body_part:
-            filters["BodyPartExamined"] = body_part
-        query_dict["Query"] = filters
-
-        response = self._request("POST", "/tools/find", json=query_dict)
+            params["BodyPartExamined"] = body_part
+        response = self._request("GET", f"{_DICOMWEB_PREFIX}/studies/{study_uid}/series", params=params)
         data = response.json()
-
-        if isinstance(data, list):
-            return [_parse_orthanc_series(item) for item in data]
-        return []
+        return [_qido_to_series(item, study_uid=study_uid) for item in data]
 
     def query_instances(
         self,
@@ -739,26 +815,18 @@ class DicomClient:
         Returns:
             List of InstanceMetadata objects.
         """
-        query_dict: dict[str, Any] = {
-            "Level": "Instance",
-            "Limit": limit,
-            "Expand": True,
-        }
-        filters: dict[str, str] = {}
-        if study_uid:
-            filters["StudyInstanceUID"] = study_uid
-        if series_uid:
-            filters["SeriesInstanceUID"] = series_uid
+        if not study_uid or not series_uid:
+            raise DicomValidationError("study_uid and series_uid are required for instance DICOMweb queries")
+        params: dict[str, Any] = {"limit": limit}
         if modality:
-            filters["Modality"] = modality
-        query_dict["Query"] = filters
-
-        response = self._request("POST", "/tools/find", json=query_dict)
+            params["Modality"] = modality
+        response = self._request(
+            "GET",
+            f"{_DICOMWEB_PREFIX}/studies/{study_uid}/series/{series_uid}/instances",
+            params=params,
+        )
         data = response.json()
-
-        if isinstance(data, list):
-            return [_parse_orthanc_instance(item) for item in data]
-        return []
+        return [_metadata_to_instance(item) for item in data]
 
     # ─── Anonymization ───────────────────────────────────────────────
 

@@ -130,13 +130,13 @@ class TestSubjects:
         respx.post(f"{BASE_URL}/api/subjects").mock(
             return_value=httpx.Response(
                 200,
-                json={"subject_id": "sub-01", "patient_ref": "P001", "hospital_ids": ["H1"]},
+                json={"subject_id": "sub-01", "patient_ref": "P001", "hospital_ids": {"0": "H1"}},
             )
         )
         subject = client.create_subject("sub-01", patient_ref="P001", hospital_ids=["H1"])
         assert subject.subject_id == "sub-01"
         assert subject.patient_ref == "P001"
-        assert subject.hospital_ids == ["H1"]
+        assert subject.hospital_ids == {"0": "H1"}
 
     @respx.mock
     def test_get_subject(self, client):
@@ -216,7 +216,7 @@ class TestSessions:
 class TestQuery:
     @respx.mock
     def test_query_all(self, client):
-        respx.get(f"{BASE_URL}/api/query").mock(
+        respx.post(f"{BASE_URL}/api/query").mock(
             return_value=httpx.Response(
                 200,
                 json={
@@ -234,23 +234,23 @@ class TestQuery:
 
     @respx.mock
     def test_query_with_filters(self, client):
-        route = respx.get(f"{BASE_URL}/api/query").mock(
+        route = respx.post(f"{BASE_URL}/api/query").mock(
             return_value=httpx.Response(200, json={"resources": [], "total": 0})
         )
         client.query(subject_id="sub-01", modality="anat", limit=10, offset=0)
-        params = route.calls[0].request.url.params
-        assert params["subject_id"] == "sub-01"
-        assert params["modality"] == "anat"
-        assert params["limit"] == "10"
+        body = json.loads(route.calls[0].request.content)
+        assert body["subject_id"] == "sub-01"
+        assert body["modality"] == ["anat"]
+        assert body["limit"] == 10
 
     @respx.mock
     def test_query_with_labels(self, client):
-        route = respx.get(f"{BASE_URL}/api/query").mock(
+        route = respx.post(f"{BASE_URL}/api/query").mock(
             return_value=httpx.Response(200, json={"resources": [], "total": 0})
         )
         client.query(labels=["tag1", "tag2"])
-        params = route.calls[0].request.url.params
-        assert params["labels"] == "tag1,tag2"
+        body = json.loads(route.calls[0].request.content)
+        assert body["labels"] == {"match": ["tag1", "tag2"]}
 
 
 # ------------------------------------------------------------------
@@ -260,9 +260,9 @@ class TestQuery:
 class TestLabels:
     @respx.mock
     def test_get_labels(self, client):
-        respx.get(f"{BASE_URL}/api/resources/res-01/labels").mock(
+        respx.get(f"{BASE_URL}/api/labels/res-01").mock(
             return_value=httpx.Response(
-                200, json=[{"key": "quality", "value": "good"}]
+                200, json=[{"tag_key": "quality", "tag_value": "good"}]
             )
         )
         labels = client.get_labels("res-01")
@@ -271,9 +271,9 @@ class TestLabels:
 
     @respx.mock
     def test_set_labels(self, client):
-        route = respx.put(f"{BASE_URL}/api/resources/res-01/labels").mock(
+        route = respx.put(f"{BASE_URL}/api/labels/res-01").mock(
             return_value=httpx.Response(
-                200, json=[{"key": "new-tag"}]
+                200, json=[{"tag_key": "new-tag", "tag_value": True}]
             )
         )
         labels = client.set_labels("res-01", ["new-tag"])
@@ -282,9 +282,9 @@ class TestLabels:
 
     @respx.mock
     def test_patch_labels(self, client):
-        route = respx.patch(f"{BASE_URL}/api/resources/res-01/labels").mock(
+        route = respx.patch(f"{BASE_URL}/api/labels/res-01").mock(
             return_value=httpx.Response(
-                200, json=[{"key": "added"}, {"key": "existing"}]
+                200, json=[{"tag_key": "added", "tag_value": True}, {"tag_key": "existing", "tag_value": True}]
             )
         )
         labels = client.patch_labels("res-01", add=["added"], remove=["old"])
@@ -296,7 +296,7 @@ class TestLabels:
 
     @respx.mock
     def test_list_all_tags(self, client):
-        respx.get(f"{BASE_URL}/api/tags").mock(
+        respx.get(f"{BASE_URL}/api/labels").mock(
             return_value=httpx.Response(
                 200, json=[{"key": "quality", "count": 42}]
             )
@@ -317,10 +317,11 @@ class TestAnnotations:
             return_value=httpx.Response(
                 200,
                 json={
-                    "id": "ann-01",
+                    "annotation_id": "ann-01",
                     "resource_id": "res-01",
-                    "type": "region",
+                    "ann_type": "region",
                     "label": "hippocampus",
+                    "data": {},
                     "confidence": 0.95,
                 },
             )
@@ -331,12 +332,12 @@ class TestAnnotations:
 
     @respx.mock
     def test_list_annotations(self, client):
-        respx.get(f"{BASE_URL}/api/resources/res-01/annotations").mock(
+        respx.get(f"{BASE_URL}/api/objects/res-01/annotations").mock(
             return_value=httpx.Response(
                 200,
                 json=[
-                    {"id": "ann-01", "resource_id": "res-01", "type": "region", "label": "hippocampus"},
-                    {"id": "ann-02", "resource_id": "res-01", "type": "artifact", "label": "motion"},
+                    {"annotation_id": "ann-01", "resource_id": "res-01", "ann_type": "region", "label": "hippocampus", "data": {}},
+                    {"annotation_id": "ann-02", "resource_id": "res-01", "ann_type": "artifact", "label": "motion", "data": {}},
                 ],
             )
         )
@@ -380,14 +381,14 @@ class TestTasks:
 
     @respx.mock
     def test_cancel_task(self, client):
-        respx.post(f"{BASE_URL}/api/tasks/task-01/cancel").mock(
+        respx.delete(f"{BASE_URL}/api/tasks/task-01").mock(
             return_value=httpx.Response(
                 200,
-                json={"task_id": "task-01", "action": "convert", "status": "cancelled"},
+                json={"cancelled": True, "task_id": "task-01"},
             )
         )
         task = client.cancel_task("task-01")
-        assert task.status == "cancelled"
+        assert task["cancelled"] is True
 
 
 # ------------------------------------------------------------------
@@ -438,7 +439,7 @@ class TestWebhooks:
 class TestSystem:
     @respx.mock
     def test_verify(self, client):
-        respx.get(f"{BASE_URL}/api/verify").mock(
+        respx.post(f"{BASE_URL}/api/verify").mock(
             return_value=httpx.Response(
                 200,
                 json={"status": "ok", "checked": 100, "errors": []},
@@ -493,7 +494,7 @@ class TestSystem:
 class TestUploadDownload:
     @respx.mock
     def test_upload(self, client, tmp_file):
-        respx.post(f"{BASE_URL}/api/upload").mock(
+        respx.post(f"{BASE_URL}/api/store").mock(
             return_value=httpx.Response(
                 200,
                 json={"resource_id": "res-01", "file_name": tmp_file.name},
@@ -509,7 +510,7 @@ class TestUploadDownload:
 
     @respx.mock
     def test_upload_with_labels(self, client, tmp_file):
-        route = respx.post(f"{BASE_URL}/api/upload").mock(
+        route = respx.post(f"{BASE_URL}/api/store").mock(
             return_value=httpx.Response(200, json={"resource_id": "res-01"})
         )
         client.upload(
@@ -539,7 +540,7 @@ class TestUploadDownload:
     @respx.mock
     def test_download(self, client, tmp_file):
         output = tmp_file.parent / "downloaded.nii.gz"
-        respx.get(f"{BASE_URL}/api/download/res-01").mock(
+        respx.get(f"{BASE_URL}/api/objects/res-01/stream").mock(
             return_value=httpx.Response(200, content=b"downloaded data")
         )
         result = client.download("res-01", output)
@@ -550,7 +551,7 @@ class TestUploadDownload:
     @respx.mock
     def test_download_stream_with_range(self, client, tmp_file):
         output = tmp_file.parent / "range_download.nii.gz"
-        respx.get(f"{BASE_URL}/api/download/res-01").mock(
+        respx.get(f"{BASE_URL}/api/objects/res-01/stream").mock(
             return_value=httpx.Response(206, content=b"partial data")
         )
         result = client.download_stream("res-01", output, range_start=0, range_end=100)
@@ -560,7 +561,7 @@ class TestUploadDownload:
     @respx.mock
     def test_batch_download(self, client, tmp_file):
         output = tmp_file.parent / "batch.zip"
-        respx.post(f"{BASE_URL}/api/download/batch").mock(
+        respx.post(f"{BASE_URL}/api/objects/batch-download").mock(
             return_value=httpx.Response(200, content=b"zip data")
         )
         result = client.batch_download(["res-01", "res-02"], output)
@@ -575,7 +576,7 @@ class TestUploadDownload:
 class TestProgressCallback:
     @respx.mock
     def test_upload_progress_callback(self, client, tmp_file):
-        respx.post(f"{BASE_URL}/api/upload").mock(
+        respx.post(f"{BASE_URL}/api/store").mock(
             return_value=httpx.Response(200, json={"resource_id": "res-01"})
         )
         progress_calls = []
@@ -595,7 +596,7 @@ class TestProgressCallback:
     @respx.mock
     def test_download_progress_callback(self, client, tmp_file):
         output = tmp_file.parent / "progress_dl.nii.gz"
-        respx.get(f"{BASE_URL}/api/download/res-01").mock(
+        respx.get(f"{BASE_URL}/api/objects/res-01/stream").mock(
             return_value=httpx.Response(200, content=b"data" * 100, headers={"content-length": "400"})
         )
         progress_calls = []
@@ -648,7 +649,7 @@ class TestAsyncClient:
     @respx.mock
     @pytest.mark.asyncio
     async def test_async_query(self):
-        respx.get(f"{BASE_URL}/api/query").mock(
+        respx.post(f"{BASE_URL}/api/query").mock(
             return_value=httpx.Response(200, json={"resources": [{"resource_id": "r1"}], "total": 1})
         )
         async with AsyncBidsClient(base_url=BASE_URL) as c:
@@ -661,7 +662,7 @@ class TestAsyncClient:
         respx.post(f"{BASE_URL}/api/annotations").mock(
             return_value=httpx.Response(
                 200,
-                json={"id": "ann-01", "resource_id": "r1", "type": "note", "label": "test"},
+                json={"annotation_id": "ann-01", "resource_id": "r1", "ann_type": "note", "label": "test", "data": {}},
             )
         )
         async with AsyncBidsClient(base_url=BASE_URL) as c:
@@ -709,7 +710,7 @@ class TestAsyncClient:
     @respx.mock
     @pytest.mark.asyncio
     async def test_async_system(self):
-        respx.get(f"{BASE_URL}/api/verify").mock(
+        respx.post(f"{BASE_URL}/api/verify").mock(
             return_value=httpx.Response(200, json={"status": "ok"})
         )
         respx.post(f"{BASE_URL}/api/rebuild").mock(
@@ -729,16 +730,16 @@ class TestAsyncClient:
     @respx.mock
     @pytest.mark.asyncio
     async def test_async_labels(self):
-        respx.get(f"{BASE_URL}/api/resources/r1/labels").mock(
-            return_value=httpx.Response(200, json=[{"key": "tag1"}])
+        respx.get(f"{BASE_URL}/api/labels/r1").mock(
+            return_value=httpx.Response(200, json=[{"tag_key": "tag1", "tag_value": True}])
         )
-        respx.put(f"{BASE_URL}/api/resources/r1/labels").mock(
-            return_value=httpx.Response(200, json=[{"key": "new-tag"}])
+        respx.put(f"{BASE_URL}/api/labels/r1").mock(
+            return_value=httpx.Response(200, json=[{"tag_key": "new-tag", "tag_value": True}])
         )
-        respx.patch(f"{BASE_URL}/api/resources/r1/labels").mock(
-            return_value=httpx.Response(200, json=[{"key": "added"}])
+        respx.patch(f"{BASE_URL}/api/labels/r1").mock(
+            return_value=httpx.Response(200, json=[{"tag_key": "added", "tag_value": True}])
         )
-        respx.get(f"{BASE_URL}/api/tags").mock(
+        respx.get(f"{BASE_URL}/api/labels").mock(
             return_value=httpx.Response(200, json=[{"key": "tag1", "count": 5}])
         )
         async with AsyncBidsClient(base_url=BASE_URL) as c:
@@ -781,24 +782,24 @@ class TestAsyncClient:
                 200, json={"task_id": "t1", "action": "convert", "status": "running"}
             )
         )
-        respx.post(f"{BASE_URL}/api/tasks/t1/cancel").mock(
+        respx.delete(f"{BASE_URL}/api/tasks/t1").mock(
             return_value=httpx.Response(
-                200, json={"task_id": "t1", "action": "convert", "status": "cancelled"}
+                200, json={"cancelled": True, "task_id": "t1"}
             )
         )
         async with AsyncBidsClient(base_url=BASE_URL) as c:
             task = await c.get_task("t1")
             assert task.status == "running"
             task = await c.cancel_task("t1")
-            assert task.status == "cancelled"
+            assert task["cancelled"] is True
 
     @respx.mock
     @pytest.mark.asyncio
     async def test_async_annotations(self):
-        respx.get(f"{BASE_URL}/api/resources/r1/annotations").mock(
+        respx.get(f"{BASE_URL}/api/objects/r1/annotations").mock(
             return_value=httpx.Response(
                 200,
-                json=[{"id": "a1", "resource_id": "r1", "type": "note", "label": "good"}],
+                json=[{"annotation_id": "a1", "resource_id": "r1", "ann_type": "note", "label": "good", "data": {}}],
             )
         )
         async with AsyncBidsClient(base_url=BASE_URL) as c:
@@ -822,7 +823,7 @@ class TestAsyncClient:
     @pytest.mark.asyncio
     async def test_async_download(self, tmp_file):
         output = tmp_file.parent / "async_dl.nii.gz"
-        respx.get(f"{BASE_URL}/api/download/r1").mock(
+        respx.get(f"{BASE_URL}/api/objects/r1/stream").mock(
             return_value=httpx.Response(200, content=b"async data")
         )
         async with AsyncBidsClient(base_url=BASE_URL) as c:
@@ -835,7 +836,7 @@ class TestAsyncClient:
     @pytest.mark.asyncio
     async def test_async_batch_download(self, tmp_file):
         output = tmp_file.parent / "async_batch.zip"
-        respx.post(f"{BASE_URL}/api/download/batch").mock(
+        respx.post(f"{BASE_URL}/api/objects/batch-download").mock(
             return_value=httpx.Response(200, content=b"zip data")
         )
         async with AsyncBidsClient(base_url=BASE_URL) as c:

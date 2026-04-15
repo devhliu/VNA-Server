@@ -74,8 +74,8 @@ def test_list_resources_with_filters(client: VnaClient) -> None:
 
 @respx.mock
 def test_list_resources_with_labels(client: VnaClient) -> None:
-    respx.get(f"{BASE_URL}/api/v1/resources").mock(
-        return_value=Response(200, json={"total": 0, "limit": 50, "offset": 0, "resources": []})
+    respx.post(f"{BASE_URL}/api/v1/query").mock(
+        return_value=Response(200, json={"total": 0, "limit": 50, "offset": 0, "items": []})
     )
     result = client.list_resources(labels={"modality": "MRI"})
     assert result.total == 0
@@ -168,7 +168,7 @@ def test_create_patient(client: VnaClient) -> None:
 
 @respx.mock
 def test_update_patient(client: VnaClient) -> None:
-    respx.patch(f"{BASE_URL}/api/v1/patients/p1").mock(
+    respx.put(f"{BASE_URL}/api/v1/patients/p1").mock(
         return_value=Response(200, json={"patient_ref": "p1", "hospital_id": "H999", "source": "hospital_c", "resource_count": 3, "resources": [], "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-02T00:00:00Z"})
     )
     result = client.update_patient("p1", hospital_id="H999")
@@ -179,8 +179,8 @@ def test_update_patient(client: VnaClient) -> None:
 
 @respx.mock
 def test_get_labels(client: VnaClient) -> None:
-    respx.get(f"{BASE_URL}/api/v1/resources/r1/labels").mock(
-        return_value=Response(200, json=[{"key": "modality", "value": "MRI"}, {"key": "site", "value": "A"}])
+    respx.get(f"{BASE_URL}/api/v1/labels/resource/r1").mock(
+        return_value=Response(200, json={"labels": [{"tag_key": "modality", "tag_value": "MRI"}, {"tag_key": "site", "tag_value": "A"}]})
     )
     result = client.get_labels("r1")
     assert len(result) == 2
@@ -189,8 +189,8 @@ def test_get_labels(client: VnaClient) -> None:
 
 @respx.mock
 def test_get_labels_dict_response(client: VnaClient) -> None:
-    respx.get(f"{BASE_URL}/api/v1/resources/r1/labels").mock(
-        return_value=Response(200, json={"labels": [{"key": "k1", "value": "v1"}]})
+    respx.get(f"{BASE_URL}/api/v1/labels/resource/r1").mock(
+        return_value=Response(200, json={"labels": [{"tag_key": "k1", "tag_value": "v1"}]})
     )
     result = client.get_labels("r1")
     assert len(result) == 1
@@ -198,17 +198,18 @@ def test_get_labels_dict_response(client: VnaClient) -> None:
 
 @respx.mock
 def test_set_labels(client: VnaClient) -> None:
-    respx.put(f"{BASE_URL}/api/v1/resources/r1/labels").mock(
-        return_value=Response(200, json=[{"key": "modality", "value": "CT"}])
+    route = respx.put(f"{BASE_URL}/api/v1/labels/resource/r1").mock(
+        return_value=Response(200, json={"labels": [{"tag_key": "modality", "tag_value": "CT"}]})
     )
     result = client.set_labels("r1", {"modality": "CT"})
     assert result[0].value == "CT"
+    assert route.calls[0].request.content == b'{"labels":[{"tag_key":"modality","tag_value":"CT"}]}'
 
 
 @respx.mock
 def test_set_labels_dict_response(client: VnaClient) -> None:
-    respx.put(f"{BASE_URL}/api/v1/resources/r1/labels").mock(
-        return_value=Response(200, json={"labels": [{"key": "new", "value": "val"}]})
+    respx.put(f"{BASE_URL}/api/v1/labels/resource/r1").mock(
+        return_value=Response(200, json={"labels": [{"tag_key": "new", "tag_value": "val"}]})
     )
     result = client.set_labels("r1", {"new": "val"})
     assert result[0].key == "new"
@@ -216,8 +217,11 @@ def test_set_labels_dict_response(client: VnaClient) -> None:
 
 @respx.mock
 def test_patch_labels(client: VnaClient) -> None:
-    respx.patch(f"{BASE_URL}/api/v1/resources/r1/labels").mock(
-        return_value=Response(200, json=[{"key": "k1", "value": "v1"}, {"key": "k2", "value": "v2"}])
+    respx.get(f"{BASE_URL}/api/v1/labels/resource/r1").mock(
+        return_value=Response(200, json={"labels": [{"tag_key": "old_key", "tag_value": "old"}]})
+    )
+    respx.put(f"{BASE_URL}/api/v1/labels/resource/r1").mock(
+        return_value=Response(200, json={"labels": [{"tag_key": "k1", "tag_value": "v1"}, {"tag_key": "k2", "tag_value": "v2"}]})
     )
     result = client.patch_labels("r1", add={"k1": "v1", "k2": "v2"}, remove=["old_key"])
     assert len(result) == 2
@@ -225,8 +229,8 @@ def test_patch_labels(client: VnaClient) -> None:
 
 @respx.mock
 def test_patch_labels_add_only(client: VnaClient) -> None:
-    respx.patch(f"{BASE_URL}/api/v1/resources/r1/labels").mock(
-        return_value=Response(200, json={"labels": [{"key": "added", "value": "yes"}]})
+    respx.patch(f"{BASE_URL}/api/v1/labels/resource/r1").mock(
+        return_value=Response(200, json={"labels": [{"tag_key": "added", "tag_value": "yes"}]})
     )
     result = client.patch_labels("r1", add={"added": "yes"})
     assert result[0].key == "added"
@@ -234,8 +238,11 @@ def test_patch_labels_add_only(client: VnaClient) -> None:
 
 @respx.mock
 def test_patch_labels_remove_only(client: VnaClient) -> None:
-    respx.patch(f"{BASE_URL}/api/v1/resources/r1/labels").mock(
-        return_value=Response(200, json=[])
+    respx.get(f"{BASE_URL}/api/v1/labels/resource/r1").mock(
+        return_value=Response(200, json={"labels": [{"tag_key": "key1", "tag_value": "v1"}, {"tag_key": "key2", "tag_value": "v2"}]})
+    )
+    respx.put(f"{BASE_URL}/api/v1/labels/resource/r1").mock(
+        return_value=Response(200, json={"labels": []})
     )
     result = client.patch_labels("r1", remove=["key1", "key2"])
     assert len(result) == 0
@@ -243,18 +250,18 @@ def test_patch_labels_remove_only(client: VnaClient) -> None:
 
 @respx.mock
 def test_list_all_tags(client: VnaClient) -> None:
-    respx.get(f"{BASE_URL}/api/v1/labels/tags").mock(
-        return_value=Response(200, json=[{"key": "modality", "count": 10}, {"key": "site", "count": 5}])
+    respx.get(f"{BASE_URL}/api/v1/labels").mock(
+        return_value=Response(200, json={"items": [{"tag_key": "modality", "tag_value": "MRI"}, {"tag_key": "modality", "tag_value": "MRI"}, {"tag_key": "site", "tag_value": "A"}]})
     )
     result = client.list_all_tags()
     assert len(result) == 2
-    assert result[0].count == 10
+    assert result[0].count == 2
 
 
 @respx.mock
 def test_list_all_tags_dict_response(client: VnaClient) -> None:
-    respx.get(f"{BASE_URL}/api/v1/labels/tags").mock(
-        return_value=Response(200, json={"tags": [{"key": "t1", "count": 1}]})
+    respx.get(f"{BASE_URL}/api/v1/labels").mock(
+        return_value=Response(200, json={"items": [{"tag_key": "t1", "tag_value": "v1"}]})
     )
     result = client.list_all_tags()
     assert len(result) == 1
@@ -277,8 +284,8 @@ def test_batch_label(client: VnaClient) -> None:
 
 @respx.mock
 def test_query(client: VnaClient) -> None:
-    respx.get(f"{BASE_URL}/api/v1/query").mock(
-        return_value=Response(200, json={"total": 3, "limit": 50, "offset": 0, "resources": [
+    respx.post(f"{BASE_URL}/api/v1/query").mock(
+        return_value=Response(200, json={"total": 3, "limit": 50, "offset": 0, "items": [
             {"resource_id": f"r{i}", "patient_ref": "p1", "source_type": "dicom", "data_type": "imaging", "labels": [], "metadata": {}, "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"}
             for i in range(3)
         ]})
@@ -290,8 +297,8 @@ def test_query(client: VnaClient) -> None:
 
 @respx.mock
 def test_query_with_search(client: VnaClient) -> None:
-    respx.get(f"{BASE_URL}/api/v1/query").mock(
-        return_value=Response(200, json={"total": 0, "limit": 50, "offset": 0, "resources": []})
+    respx.post(f"{BASE_URL}/api/v1/query").mock(
+        return_value=Response(200, json={"total": 0, "limit": 50, "offset": 0, "items": []})
     )
     result = client.query(search="brain MRI")
     assert result.total == 0
@@ -301,8 +308,8 @@ def test_query_with_search(client: VnaClient) -> None:
 
 @respx.mock
 def test_register_server(client: VnaClient) -> None:
-    respx.post(f"{BASE_URL}/api/v1/servers").mock(
-        return_value=Response(201, json={"server_type": "dicom", "url": "http://dcm:4242", "name": "test-dcm", "server_id": "srv-1", "registered_at": "2026-01-01T00:00:00Z"})
+    respx.post(f"{BASE_URL}/api/v1/sync/register").mock(
+        return_value=Response(200, json={"source_db": "dicom", "url": "http://dcm:4242", "server_id": "srv-1", "registered_at": "2026-01-01T00:00:00Z"})
     )
     result = client.register_server("dicom", "http://dcm:4242", "test-dcm")
     assert result.server_id == "srv-1"
@@ -323,19 +330,20 @@ def test_sync_status(client: VnaClient) -> None:
 @respx.mock
 def test_trigger_sync(client: VnaClient) -> None:
     respx.post(f"{BASE_URL}/api/v1/sync/trigger").mock(
-        return_value=Response(200, json={"dicom": {"status": "syncing"}, "bids": {"status": "idle"}, "last_sync": "2026-01-01T00:00:00Z", "events": []})
+        return_value=Response(200, json={"triggered": True, "pending_events": 4, "processed_events": 2, "source_db": "dicom"})
     )
     result = client.trigger_sync("dicom")
-    assert result.dicom["status"] == "syncing"
+    assert result.triggered is True
+    assert result.source_db == "dicom"
 
 
 @respx.mock
 def test_trigger_sync_with_enum(client: VnaClient) -> None:
     respx.post(f"{BASE_URL}/api/v1/sync/trigger").mock(
-        return_value=Response(200, json={"dicom": {"status": "idle"}, "bids": {"status": "syncing"}, "last_sync": None, "events": []})
+        return_value=Response(200, json={"triggered": True, "pending_events": 3, "processed_events": 1, "source_db": "bids"})
     )
     result = client.trigger_sync(SourceType.BIDS)
-    assert result.bids["status"] == "syncing"
+    assert result.source_db == "bids"
 
 
 # ─── Error Handling ─────────────────────────────────────────────────────────────

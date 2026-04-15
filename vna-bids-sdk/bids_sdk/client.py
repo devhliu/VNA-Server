@@ -42,7 +42,9 @@ def _raise_for_status(response: httpx.Response) -> None:
         body = response.text
 
     message = f"HTTP {status_code}: {response.reason_phrase}"
-    if isinstance(body, dict) and "message" in body:
+    if isinstance(body, dict) and "detail" in body:
+        message = body["detail"]
+    elif isinstance(body, dict) and "message" in body:
         message = body["message"]
     elif isinstance(body, dict) and "error" in body:
         message = body["error"]
@@ -81,6 +83,43 @@ def _normalize_label_map(
             normalized[key] = value
         else:
             normalized[item] = True
+    return normalized
+
+
+def _normalize_hospital_ids(hospital_ids: Optional[Union[List[str], Dict[str, Any]]]) -> Dict[str, Any]:
+    if hospital_ids is None:
+        return {}
+    if isinstance(hospital_ids, dict):
+        return hospital_ids
+    return {str(index): value for index, value in enumerate(hospital_ids)}
+
+
+def _extract_items(data: Any) -> List[Any]:
+    if isinstance(data, dict):
+        return data.get("items", [])
+    if isinstance(data, list):
+        return data
+    return []
+
+
+def _label_response_items(data: Any) -> List[Dict[str, Any]]:
+    items = _extract_items(data)
+    normalized = []
+    for item in items:
+        if "tag_key" in item or "tag_value" in item:
+            normalized.append(
+                {
+                    "key": item.get("tag_key"),
+                    "value": item.get("tag_value"),
+                    "tagged_by": item.get("tagged_by"),
+                    "tagged_at": item.get("tagged_at"),
+                    "level": item.get("level"),
+                    "target_path": item.get("target_path"),
+                    "resource_id": item.get("resource_id"),
+                }
+            )
+        else:
+            normalized.append(item)
     return normalized
 
 
@@ -258,9 +297,6 @@ class BidsClient:
             raise BidsValidationError(f"File not found: {file_path}")
 
         file_size = path.stat().st_size
-        total_chunks = (file_size + chunk_size - 1) // chunk_size
-        upload_id = None
-
         # Initiate chunked upload
         init_response = self._request(
             "POST",
@@ -278,14 +314,16 @@ class BidsClient:
         )
         init_data = init_response.json()
         upload_id = init_data.get("upload_id", init_data.get("id"))
+        chunk_size = int(init_data.get("chunk_size", chunk_size))
+        total_chunks = int(init_data.get("total_chunks", (file_size + chunk_size - 1) // chunk_size))
 
         bytes_uploaded = 0
         with open(path, "rb") as f:
             for chunk_index in range(total_chunks):
                 chunk_data = f.read(chunk_size)
-                files = {"chunk": (f"chunk_{chunk_index}", chunk_data)}
+                files = {"file": (f"chunk_{chunk_index}", chunk_data)}
                 self._request(
-                    "POST",
+                    "PATCH",
                     f"/api/store/{upload_id}",
                     data={"chunk_index": str(chunk_index)},
                     files=files,
@@ -458,25 +496,25 @@ class BidsClient:
         Returns:
             QueryResult with matching resources.
         """
-        params: Dict[str, Any] = {}
+        body: Dict[str, Any] = {}
         if subject_id:
-            params["subject_id"] = subject_id
+            body["subject_id"] = subject_id
         if session_id:
-            params["session_id"] = session_id
+            body["session_id"] = session_id
         if modality:
-            params["modality"] = modality
+            body["modality"] = [modality]
         if labels:
-            params["labels"] = ",".join(labels)
+            body["labels"] = {"match": labels}
         if metadata:
-            params.update(metadata)
+            body["metadata"] = metadata
         if search:
-            params["search"] = search
+            body["search"] = search
         if limit is not None:
-            params["limit"] = limit
+            body["limit"] = limit
         if offset is not None:
-            params["offset"] = offset
+            body["offset"] = offset
 
-        response = self._request("GET", "/api/query", params=params)
+        response = self._request("POST", "/api/query", json=body)
         data = response.json()
         return (
             QueryResult(**data)
@@ -497,8 +535,8 @@ class BidsClient:
         Returns:
             List of label dicts.
         """
-        response = self._request("GET", f"/api/objects/{resource_id}/labels")
-        return response.json()
+        response = self._request("GET", f"/api/labels/{resource_id}")
+        return _label_response_items(response.json())
 
     def set_labels(
         self, resource_id: str, labels: Union[List[str], Dict[str, Any]]
@@ -514,10 +552,10 @@ class BidsClient:
         """
         response = self._request(
             "PUT",
-            f"/api/objects/{resource_id}/labels",
+            f"/api/labels/{resource_id}",
             json={"labels": _normalize_label_map(labels)},
         )
-        return response.json()
+        return _label_response_items(response.json())
 
     def patch_labels(
         self,
@@ -541,9 +579,9 @@ class BidsClient:
         if remove:
             body["remove"] = remove
         response = self._request(
-            "PATCH", f"/api/objects/{resource_id}/labels", json=body
+            "PATCH", f"/api/labels/{resource_id}", json=body
         )
-        return response.json()
+        return _label_response_items(response.json())
 
     def list_all_tags(self) -> List[Dict[str, Any]]:
         """List all tags with usage counts.
@@ -580,11 +618,10 @@ class BidsClient:
         """
         body: Dict[str, Any] = {
             "resource_id": resource_id,
-            "type": ann_type,
+            "ann_type": ann_type,
             "label": label,
+            "data": data or {},
         }
-        if data is not None:
-            body["data"] = data
         if confidence is not None:
             body["confidence"] = confidence
         response = self._request("POST", "/api/annotations", json=body)
@@ -629,7 +666,7 @@ class BidsClient:
         if patient_ref is not None:
             body["patient_ref"] = patient_ref
         if hospital_ids is not None:
-            body["hospital_ids"] = hospital_ids
+            body["hospital_ids"] = _normalize_hospital_ids(hospital_ids)
         response = self._request("POST", "/api/subjects", json=body)
         return Subject(**response.json())
 
@@ -653,9 +690,7 @@ class BidsClient:
         """
         response = self._request("GET", "/api/subjects")
         data = response.json()
-        if isinstance(data, list):
-            return [Subject(**s) for s in data]
-        return []
+        return [Subject(**s) for s in _extract_items(data)]
 
     def create_session(
         self,
@@ -696,9 +731,7 @@ class BidsClient:
             params["subject_id"] = subject_id
         response = self._request("GET", "/api/sessions", params=params)
         data = response.json()
-        if isinstance(data, list):
-            return [Session(**s) for s in data]
-        return []
+        return [Session(**s) for s in _extract_items(data)]
 
     # ------------------------------------------------------------------
     # Tasks
@@ -741,7 +774,7 @@ class BidsClient:
         response = self._request("GET", f"/api/tasks/{task_id}")
         return Task(**response.json())
 
-    def cancel_task(self, task_id: str) -> Task:
+    def cancel_task(self, task_id: str) -> Dict[str, Any]:
         """Cancel a running task.
 
         Args:
@@ -750,8 +783,8 @@ class BidsClient:
         Returns:
             Updated Task object.
         """
-        response = self._request("POST", f"/api/tasks/{task_id}/cancel")
-        return Task(**response.json())
+        response = self._request("DELETE", f"/api/tasks/{task_id}")
+        return response.json()
 
     # ------------------------------------------------------------------
     # Webhooks
@@ -794,9 +827,7 @@ class BidsClient:
         """
         response = self._request("GET", "/api/webhooks")
         data = response.json()
-        if isinstance(data, list):
-            return [Webhook(**w) for w in data]
-        return []
+        return [Webhook(**w) for w in _extract_items(data)]
 
     def delete_webhook(self, webhook_id: str) -> None:
         """Delete a webhook.
@@ -814,6 +845,7 @@ class BidsClient:
         self,
         target: Optional[str] = None,
         check_hash: bool = True,
+        repair: bool = False,
     ) -> Dict[str, Any]:
         """Verify data integrity.
 
@@ -824,10 +856,8 @@ class BidsClient:
         Returns:
             Verification result dict.
         """
-        params: Dict[str, Any] = {"check_hash": str(check_hash).lower()}
-        if target:
-            params["target"] = target
-        response = self._request("GET", "/api/verify", params=params)
+        body: Dict[str, Any] = {"target": target or "all", "check_hash": check_hash, "repair": repair}
+        response = self._request("POST", "/api/verify", json=body)
         return response.json()
 
     def rebuild(
@@ -951,5 +981,4 @@ class BidsClient:
         Returns:
             Statistics dictionary.
         """
-        response = self._request("GET", "/api/statistics")
-        return response.json()
+        raise BidsHTTPError("The current BIDS server does not expose /api/statistics.")

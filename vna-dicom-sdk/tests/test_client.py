@@ -74,19 +74,19 @@ class TestStore:
     def test_store_success(self, client, mock_response, tmp_path):
         test_file = tmp_path / "test.dcm"
         test_file.write_bytes(b"\x00" * 132)
-        result_data = {"ID": "abc123", "ParentStudy": "study-uid-123"}
+        result_data = {"SOPInstanceUID": "1.2.3", "StudyInstanceUID": "study-uid-123"}
         resp = mock_response(200, result_data)
         with patch.object(client._client, "request", return_value=resp):
             result = client.store(str(test_file))
             assert result.success is True
-            assert result.sop_instance_uid == "abc123"
+            assert result.sop_instance_uid == "1.2.3"
 
     def test_store_file_not_found(self, client):
         with pytest.raises(DicomValidationError, match="File not found"):
             client.store("/nonexistent/file.dcm")
 
     def test_upload_dicom(self, client, mock_response):
-        result_data = {"ID": "inst-123", "ParentStudy": "study-456"}
+        result_data = {"SOPInstanceUID": "inst-123", "StudyInstanceUID": "study-456"}
         resp = mock_response(200, result_data)
         with patch.object(client._client, "request", return_value=resp):
             result = client.upload_dicom(b"\x00\x00DICM")
@@ -97,17 +97,12 @@ class TestStore:
 class TestQuery:
     def test_query_studies(self, client, mock_response):
         query_result = [{
-            "ID": "study-abc",
-            "MainDicomTags": {
-                "StudyInstanceUID": "1.2.3.4",
-                "StudyDate": "20240101",
-                "StudyDescription": "Chest CT",
-                "AccessionNumber": "ACC001",
-            },
-            "PatientMainDicomTags": {
-                "PatientID": "P001",
-                "PatientName": "DOE^JOHN",
-            },
+            "StudyInstanceUID": "1.2.3.4",
+            "StudyDate": "20240101",
+            "StudyDescription": "Chest CT",
+            "AccessionNumber": "ACC001",
+            "PatientID": "P001",
+            "PatientName": "DOE^JOHN",
         }]
         resp = mock_response(200, query_result)
         with patch.object(client._client, "request", return_value=resp):
@@ -161,35 +156,23 @@ class TestDelete:
 
 class TestMetadata:
     def test_get_study(self, client, mock_response):
-        study_data = {
-            "ID": "orthanc-id-1",
-            "MainDicomTags": {
-                "StudyInstanceUID": "1.2.3.4",
-                "StudyDate": "20240101",
-                "StudyDescription": "Chest CT",
-            },
-            "PatientMainDicomTags": {
-                "PatientID": "P001",
-                "PatientName": "DOE^JOHN",
-            },
-            "Series": ["series-1", "series-2"],
-        }
-        find_resp = mock_response(200, ["orthanc-id-1"])
+        study_data = [{
+            "StudyInstanceUID": "1.2.3.4",
+            "StudyDate": "20240101",
+            "StudyDescription": "Chest CT",
+            "PatientID": "P001",
+            "PatientName": "DOE^JOHN",
+            "NumberOfStudyRelatedSeries": 2,
+        }]
         study_resp = mock_response(200, study_data)
-
-        def mock_request(method, url, **kwargs):
-            if "tools/find" in url:
-                return find_resp
-            return study_resp
-
-        with patch.object(client._client, "request", side_effect=mock_request):
+        with patch.object(client._client, "request", return_value=study_resp):
             study = client.get_study("1.2.3.4")
             assert study.study_instance_uid == "1.2.3.4"
             assert study.patient_id == "P001"
 
     def test_get_study_not_found(self, client, mock_response):
-        find_resp = mock_response(200, [])
-        with patch.object(client._client, "request", return_value=find_resp):
+        empty_resp = mock_response(200, [])
+        with patch.object(client._client, "request", return_value=empty_resp):
             with pytest.raises(DicomNotFoundError):
                 client.get_study("nonexistent-uid")
 
@@ -261,14 +244,7 @@ class TestErrorHandling:
 class TestRender:
     def test_render_png(self, client, mock_response):
         image_bytes = b"\x89PNG\r\n\x1a\n"
-        find_resp = mock_response(200, ["inst-orthanc-id"])
         render_resp = mock_response(200, content=image_bytes, headers={"content-type": "image/png"})
-
-        def mock_request(method, url, **kwargs):
-            if "tools/find" in url:
-                return find_resp
-            return render_resp
-
-        with patch.object(client._client, "request", side_effect=mock_request):
+        with patch.object(client._client, "request", return_value=render_resp):
             data = client.render("study-uid", "series-uid", "sop-uid")
             assert data == image_bytes

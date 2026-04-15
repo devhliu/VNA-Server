@@ -8,7 +8,7 @@ from typing import Any, Optional
 
 import httpx
 
-from vna_main_sdk.client import VnaClientError
+from vna_main_sdk.client import VnaClient, VnaClientError
 from vna_main_sdk.models import (
     BatchLabelOperation,
     DataType,
@@ -84,8 +84,9 @@ class AsyncVnaClient:
                 detail = e.response.json()
             except (json.JSONDecodeError, ValueError):
                 detail = e.response.text
+            message = VnaClient._extract_error_message(e.response.reason_phrase, detail)
             raise VnaClientError(
-                f"HTTP {e.response.status_code}: {e.response.reason_phrase}",
+                f"HTTP {e.response.status_code}: {message}",
                 status_code=e.response.status_code,
                 detail=detail,
             ) from e
@@ -104,15 +105,22 @@ class AsyncVnaClient:
         offset: int = 0,
     ) -> QueryResult:
         """List resources with optional filters."""
+        if labels:
+            return await self.query(
+                patient_ref=patient_ref,
+                data_type=data_type,
+                source_type=source_type,
+                labels=labels,
+                limit=limit,
+                offset=offset,
+            )
         params: dict[str, Any] = {"limit": limit, "offset": offset}
         if patient_ref is not None:
             params["patient_ref"] = patient_ref
         if data_type is not None:
-            params["data_type"] = str(data_type) if isinstance(data_type, DataType) else data_type
+            params["data_type"] = VnaClient._enum_value(data_type)
         if source_type is not None:
-            params["source_type"] = str(source_type) if isinstance(source_type, SourceType) else source_type
-        if labels:
-            params["labels"] = labels
+            params["source_type"] = VnaClient._enum_value(source_type)
         resp = await self._request("GET", "/api/v1/resources", params=params)
         return QueryResult.model_validate(resp.json())
 
@@ -127,6 +135,7 @@ class AsyncVnaClient:
         source_type: str | SourceType,
         dicom_study_uid: Optional[str] = None,
         dicom_series_uid: Optional[str] = None,
+        dicom_sop_uid: Optional[str] = None,
         bids_path: Optional[str] = None,
         bids_subject: Optional[str] = None,
         bids_session: Optional[str] = None,
@@ -136,30 +145,26 @@ class AsyncVnaClient:
         metadata: Optional[dict[str, Any]] = None,
     ) -> Resource:
         """Register a new resource."""
-        body: dict[str, Any] = {
-            "patient_ref": patient_ref,
-            "source_type": str(source_type) if isinstance(source_type, SourceType) else source_type,
-        }
-        if dicom_study_uid is not None:
-            body["dicom_study_uid"] = dicom_study_uid
-        if dicom_series_uid is not None:
-            body["dicom_series_uid"] = dicom_series_uid
-        if bids_path is not None:
-            body["bids_path"] = bids_path
-        if bids_subject is not None:
-            body["bids_subject"] = bids_subject
-        if bids_session is not None:
-            body["bids_session"] = bids_session
+        body = VnaClient._resource_body(
+            patient_ref=patient_ref,
+            source_type=source_type,
+            dicom_study_uid=dicom_study_uid,
+            dicom_series_uid=dicom_series_uid,
+            dicom_sop_uid=dicom_sop_uid,
+            bids_path=bids_path,
+            bids_subject=bids_subject,
+            bids_session=bids_session,
+            data_type=data_type,
+            metadata=metadata,
+        )
         if bids_datatype is not None:
-            body["bids_datatype"] = bids_datatype
-        if data_type is not None:
-            body["data_type"] = str(data_type) if isinstance(data_type, DataType) else data_type
-        if labels is not None:
-            body["labels"] = labels
-        if metadata is not None:
-            body["metadata"] = metadata
+            body.setdefault("metadata", {})["bids_datatype"] = bids_datatype
         resp = await self._request("POST", "/api/v1/resources", json=body)
-        return Resource.model_validate(resp.json())
+        resource = Resource.model_validate(resp.json())
+        if labels:
+            await self.set_labels(resource.resource_id, labels)
+            return await self.get_resource(resource.resource_id)
+        return resource
 
     async def update_resource(
         self,
@@ -168,6 +173,7 @@ class AsyncVnaClient:
         source_type: Optional[str | SourceType] = None,
         dicom_study_uid: Optional[str] = None,
         dicom_series_uid: Optional[str] = None,
+        dicom_sop_uid: Optional[str] = None,
         bids_path: Optional[str] = None,
         bids_subject: Optional[str] = None,
         bids_session: Optional[str] = None,
@@ -177,31 +183,26 @@ class AsyncVnaClient:
         metadata: Optional[dict[str, Any]] = None,
     ) -> Resource:
         """Update an existing resource."""
-        body: dict[str, Any] = {}
-        if patient_ref is not None:
-            body["patient_ref"] = patient_ref
-        if source_type is not None:
-            body["source_type"] = str(source_type) if isinstance(source_type, SourceType) else source_type
-        if dicom_study_uid is not None:
-            body["dicom_study_uid"] = dicom_study_uid
-        if dicom_series_uid is not None:
-            body["dicom_series_uid"] = dicom_series_uid
-        if bids_path is not None:
-            body["bids_path"] = bids_path
-        if bids_subject is not None:
-            body["bids_subject"] = bids_subject
-        if bids_session is not None:
-            body["bids_session"] = bids_session
+        body = VnaClient._resource_body(
+            patient_ref=patient_ref,
+            source_type=source_type,
+            dicom_study_uid=dicom_study_uid,
+            dicom_series_uid=dicom_series_uid,
+            dicom_sop_uid=dicom_sop_uid,
+            bids_path=bids_path,
+            bids_subject=bids_subject,
+            bids_session=bids_session,
+            data_type=data_type,
+            metadata=metadata,
+        )
         if bids_datatype is not None:
-            body["bids_datatype"] = bids_datatype
-        if data_type is not None:
-            body["data_type"] = str(data_type) if isinstance(data_type, DataType) else data_type
-        if labels is not None:
-            body["labels"] = labels
-        if metadata is not None:
-            body["metadata"] = metadata
+            body.setdefault("metadata", {})["bids_datatype"] = bids_datatype
         resp = await self._request("PATCH", f"/api/v1/resources/{resource_id}", json=body)
-        return Resource.model_validate(resp.json())
+        resource = Resource.model_validate(resp.json())
+        if labels is not None:
+            await self.set_labels(resource_id, labels)
+            return await self.get_resource(resource_id)
+        return resource
 
     async def delete_resource(self, resource_id: str) -> dict[str, Any]:
         """Delete a resource from the index."""
@@ -228,15 +229,18 @@ class AsyncVnaClient:
     async def create_patient(
         self,
         patient_ref: str,
-        hospital_id: Optional[str] = None,
-        source: Optional[str] = None,
+        hospital_id: str,
+        source: str,
+        external_system: Optional[str] = None,
     ) -> Patient:
         """Create a patient ID mapping."""
-        body: dict[str, Any] = {"patient_ref": patient_ref}
-        if hospital_id is not None:
-            body["hospital_id"] = hospital_id
-        if source is not None:
-            body["source"] = source
+        body: dict[str, Any] = {
+            "patient_ref": patient_ref,
+            "hospital_id": hospital_id,
+            "source": source,
+        }
+        if external_system is not None:
+            body["external_system"] = external_system
         resp = await self._request("POST", "/api/v1/patients", json=body)
         return Patient.model_validate(resp.json())
 
@@ -245,6 +249,7 @@ class AsyncVnaClient:
         patient_ref: str,
         hospital_id: Optional[str] = None,
         source: Optional[str] = None,
+        external_system: Optional[str] = None,
     ) -> Patient:
         """Update a patient mapping."""
         body: dict[str, Any] = {}
@@ -252,18 +257,17 @@ class AsyncVnaClient:
             body["hospital_id"] = hospital_id
         if source is not None:
             body["source"] = source
-        resp = await self._request("PATCH", f"/api/v1/patients/{patient_ref}", json=body)
+        if external_system is not None:
+            body["external_system"] = external_system
+        resp = await self._request("PUT", f"/api/v1/patients/{patient_ref}", json=body)
         return Patient.model_validate(resp.json())
 
     # ─── Labels ────────────────────────────────────────────────────────────
 
     async def get_labels(self, resource_id: str) -> list[Label]:
         """Get labels for a resource."""
-        resp = await self._request("GET", f"/api/v1/resources/{resource_id}/labels")
-        data = resp.json()
-        if isinstance(data, list):
-            return [Label.model_validate(l) for l in data]
-        return [Label.model_validate(l) for l in data.get("labels", [])]
+        resp = await self._request("GET", f"/api/v1/labels/resource/{resource_id}")
+        return VnaClient._parse_labels(resp.json())
 
     async def set_labels(
         self, resource_id: str, labels: dict[str, Optional[str]]
@@ -271,13 +275,10 @@ class AsyncVnaClient:
         """Set labels for a resource (replaces existing)."""
         resp = await self._request(
             "PUT",
-            f"/api/v1/resources/{resource_id}/labels",
-            json={"labels": labels},
+            f"/api/v1/labels/resource/{resource_id}",
+            json={"labels": VnaClient._label_items(labels)},
         )
-        data = resp.json()
-        if isinstance(data, list):
-            return [Label.model_validate(l) for l in data]
-        return [Label.model_validate(l) for l in data.get("labels", [])]
+        return VnaClient._parse_labels(resp.json())
 
     async def patch_labels(
         self,
@@ -286,35 +287,40 @@ class AsyncVnaClient:
         remove: Optional[list[str]] = None,
     ) -> list[Label]:
         """Patch labels for a resource (add/remove)."""
-        body: dict[str, Any] = {}
-        if add:
-            body["add"] = add
         if remove:
-            body["remove"] = remove
+            current = {label.key: label.value for label in await self.get_labels(resource_id)}
+            current.update(add or {})
+            for key in remove:
+                current.pop(key, None)
+            return await self.set_labels(resource_id, current)
         resp = await self._request(
             "PATCH",
-            f"/api/v1/resources/{resource_id}/labels",
-            json=body,
+            f"/api/v1/labels/resource/{resource_id}",
+            json={"labels": VnaClient._label_items(add)},
         )
-        data = resp.json()
-        if isinstance(data, list):
-            return [Label.model_validate(l) for l in data]
-        return [Label.model_validate(l) for l in data.get("labels", [])]
+        return VnaClient._parse_labels(resp.json())
 
     async def list_all_tags(self) -> list[TagInfo]:
         """List all tags with counts."""
-        resp = await self._request("GET", "/api/v1/labels/tags")
+        resp = await self._request("GET", "/api/v1/labels")
         data = resp.json()
-        if isinstance(data, list):
-            return [TagInfo.model_validate(t) for t in data]
-        return [TagInfo.model_validate(t) for t in data.get("tags", [])]
+        items = data.get("items", data) if isinstance(data, dict) else data
+        counts: dict[tuple[str, Optional[str]], int] = {}
+        for item in items:
+            key = item.get("tag_key")
+            value = item.get("tag_value")
+            counts[(key, value)] = counts.get((key, value), 0) + 1
+        return [
+            TagInfo.model_validate({"tag_key": key, "tag_value": value, "count": count})
+            for (key, value), count in sorted(counts.items())
+        ]
 
     async def batch_label(self, operations: list[BatchLabelOperation]) -> dict[str, Any]:
         """Execute batch label operations."""
         resp = await self._request(
             "POST",
             "/api/v1/labels/batch",
-            json={"operations": [op.model_dump() for op in operations]},
+            json={"operations": [VnaClient._serialize_batch_operation(self, op) for op in operations]},
         )
         return resp.json()
 
@@ -331,18 +337,18 @@ class AsyncVnaClient:
         offset: int = 0,
     ) -> QueryResult:
         """Unified query across all data sources."""
-        params: dict[str, Any] = {"limit": limit, "offset": offset}
+        body: dict[str, Any] = {"limit": limit, "offset": offset}
         if patient_ref is not None:
-            params["patient_ref"] = patient_ref
+            body["patient_ref"] = patient_ref
         if data_type is not None:
-            params["data_type"] = str(data_type) if isinstance(data_type, DataType) else data_type
+            body["data_type"] = VnaClient._enum_value(data_type)
         if source_type is not None:
-            params["source_type"] = str(source_type) if isinstance(source_type, SourceType) else source_type
+            body["source_type"] = VnaClient._enum_value(source_type)
         if labels:
-            params["labels"] = labels
+            body["labels"] = VnaClient._label_items(labels)
         if search is not None:
-            params["search"] = search
-        resp = await self._request("GET", "/api/v1/query", params=params)
+            body["text_search"] = search
+        resp = await self._request("POST", "/api/v1/query", json=body)
         return QueryResult.model_validate(resp.json())
 
     # ─── Server Management ─────────────────────────────────────────────────
@@ -351,11 +357,11 @@ class AsyncVnaClient:
         self,
         server_type: str,
         url: str,
-        name: str,
+        name: Optional[str] = None,
     ) -> ServerRegistration:
         """Register a DICOM or BIDS server."""
-        body = {"server_type": server_type, "url": url, "name": name}
-        resp = await self._request("POST", "/api/v1/servers", json=body)
+        body = {"source_db": server_type, "url": url}
+        resp = await self._request("POST", "/api/v1/sync/register", json=body)
         return ServerRegistration.model_validate(resp.json())
 
     # ─── Sync ──────────────────────────────────────────────────────────────
@@ -365,10 +371,12 @@ class AsyncVnaClient:
         resp = await self._request("GET", "/api/v1/sync/status")
         return SyncStatus.model_validate(resp.json())
 
-    async def trigger_sync(self, source: str | SourceType) -> SyncStatus:
+    async def trigger_sync(self, source: Optional[str | SourceType] = None) -> SyncStatus:
         """Trigger manual sync."""
-        body = {"source": str(source) if isinstance(source, SourceType) else source}
-        resp = await self._request("POST", "/api/v1/sync/trigger", json=body)
+        params: dict[str, Any] = {}
+        if source is not None:
+            params["source_db"] = VnaClient._enum_value(source)
+        resp = await self._request("POST", "/api/v1/sync/trigger", params=params)
         return SyncStatus.model_validate(resp.json())
 
     # ─── Health ────────────────────────────────────────────────────────────
@@ -455,7 +463,7 @@ class AsyncVnaClient:
         offset: int = 0,
     ) -> list[WebhookDelivery]:
         """Get delivery history for a webhook."""
-        params: dict[str, Any] = {"limit": limit, "offset": offset}
+        params: dict[str, Any] = {"limit": limit}
         resp = await self._request("GET", f"/api/v1/webhooks/{webhook_id}/deliveries", params=params)
         data = resp.json()
         items = data.get("items", data) if isinstance(data, dict) else data
@@ -501,8 +509,14 @@ class AsyncVnaClient:
 
     async def delete_resources(self, resource_ids: list[str]) -> dict[str, Any]:
         """Delete multiple resources."""
-        resp = await self._request("POST", "/api/v1/resources/batch-delete", json={"resource_ids": resource_ids})
-        return resp.json()
+        deleted: list[Any] = []
+        failed: dict[str, Any] = {}
+        for resource_id in resource_ids:
+            try:
+                deleted.append((await self.delete_resource(resource_id)).get("deleted", resource_id))
+            except VnaClientError as exc:
+                failed[resource_id] = exc.detail or str(exc)
+        return {"deleted": deleted, "failed": failed, "total": len(resource_ids)}
 
     async def get_resources_by_patient(
         self,
@@ -528,8 +542,8 @@ class AsyncVnaClient:
         if description is not None:
             body["description"] = description
         if resource_ids is not None:
-            body["resource_ids"] = resource_ids
-        resp = await self._request("POST", "/api/v1/versions", json=body)
+            body["filters"] = {"resource_ids": resource_ids}
+        resp = await self._request("POST", "/api/v1/versions/snapshots", json=body)
         return resp.json()
 
     async def list_versions(
@@ -539,35 +553,52 @@ class AsyncVnaClient:
     ) -> dict[str, Any]:
         """List all data versions."""
         params: dict[str, Any] = {"limit": limit, "offset": offset}
-        resp = await self._request("GET", "/api/v1/versions", params=params)
+        resp = await self._request("GET", "/api/v1/versions/snapshots", params=params)
         return resp.json()
 
-    async def get_version(self, version_id: int) -> dict[str, Any]:
+    async def get_version(self, version_id: int | str) -> dict[str, Any]:
         """Get a specific version by ID."""
-        resp = await self._request("GET", f"/api/v1/versions/{version_id}")
+        resp = await self._request("GET", f"/api/v1/versions/snapshots/{version_id}")
         return resp.json()
 
     async def compare_versions(
         self,
         version_id_1: int,
         version_id_2: int,
+        resource_id: Optional[str] = None,
     ) -> dict[str, Any]:
         """Compare two versions."""
+        if resource_id is None:
+            raise VnaClientError("Version comparison is resource-scoped; pass resource_id.")
         resp = await self._request(
             "GET",
-            f"/api/v1/versions/compare",
-            params={"version_id_1": version_id_1, "version_id_2": version_id_2},
+            f"/api/v1/versions/resources/{resource_id}/versions/{version_id_1}/compare/{version_id_2}",
         )
         return resp.json()
 
-    async def restore_version(self, version_id: int) -> dict[str, Any]:
+    async def restore_version(
+        self,
+        version_id: int,
+        *,
+        resource_id: Optional[str] = None,
+        restored_by: Optional[str] = None,
+    ) -> dict[str, Any]:
         """Restore data to a specific version."""
-        resp = await self._request("POST", f"/api/v1/versions/{version_id}/restore")
+        if resource_id is None:
+            raise VnaClientError("Version restore is resource-scoped; pass resource_id.")
+        params: dict[str, Any] = {}
+        if restored_by is not None:
+            params["restored_by"] = restored_by
+        resp = await self._request(
+            "POST",
+            f"/api/v1/versions/resources/{resource_id}/versions/{version_id}/restore",
+            params=params,
+        )
         return resp.json()
 
-    async def delete_version(self, version_id: int) -> dict[str, Any]:
+    async def delete_version(self, version_id: int | str) -> dict[str, Any]:
         """Delete a version snapshot."""
-        resp = await self._request("DELETE", f"/api/v1/versions/{version_id}")
+        resp = await self._request("DELETE", f"/api/v1/versions/snapshots/{version_id}")
         return resp.json()
 
     # ─── Monitoring ───────────────────────────────────────────────────────
@@ -593,14 +624,12 @@ class AsyncVnaClient:
         limit: int = 50,
     ) -> dict[str, Any]:
         """Get system alerts."""
-        params: dict[str, Any] = {"active_only": str(active_only).lower(), "limit": limit}
-        resp = await self._request("GET", "/api/v1/monitoring/alerts", params=params)
+        resp = await self._request("GET", "/api/v1/monitoring/alerts")
         return resp.json()
 
     async def acknowledge_alert(self, alert_id: int) -> dict[str, Any]:
         """Acknowledge an alert."""
-        resp = await self._request("POST", f"/api/v1/monitoring/alerts/{alert_id}/acknowledge")
-        return resp.json()
+        raise VnaClientError("Alert acknowledgement is not supported by the current server API.")
 
     async def get_component_health(self, component: str) -> dict[str, Any]:
         """Get health status for a specific component."""
@@ -680,7 +709,7 @@ class AsyncVnaClient:
             body["priority"] = priority
         if enabled is not None:
             body["enabled"] = enabled
-        resp = await self._request("PATCH", f"/api/v1/routing/rules/{rule_id}", json=body)
+        resp = await self._request("PUT", f"/api/v1/routing/rules/{rule_id}", json=body)
         return resp.json()
 
     async def delete_routing_rule(self, rule_id: int) -> dict[str, Any]:
@@ -705,6 +734,6 @@ class AsyncVnaClient:
         resp = await self._request(
             "POST",
             "/api/v1/routing/test",
-            json={"conditions": conditions, "test_data": test_data},
+            json={"conditions": conditions, "resource_data": test_data},
         )
         return resp.json()

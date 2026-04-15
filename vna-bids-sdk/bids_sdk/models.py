@@ -3,13 +3,17 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 
 class Label(BaseModel):
     """Label/tag applied to a resource."""
-    key: str
-    value: Optional[str] = None
+    model_config = ConfigDict(populate_by_name=True)
+    key: str = Field(validation_alias=AliasChoices("key", "tag_key"))
+    value: Optional[str] = Field(default=None, validation_alias=AliasChoices("value", "tag_value"))
+    level: Optional[str] = None
+    target_path: Optional[str] = None
+    resource_id: Optional[str] = None
     tagged_by: Optional[str] = None
     tagged_at: Optional[datetime] = None
 
@@ -37,6 +41,8 @@ class QueryResult(BaseModel):
     """Query response."""
     total: int
     resources: List[Resource] = Field(default_factory=list)
+    offset: int = 0
+    limit: int = 0
 
 
 class Annotation(BaseModel):
@@ -44,7 +50,7 @@ class Annotation(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     annotation_id: str = ""
     resource_id: str = ""
-    type: str = ""
+    type: str = Field(default="", validation_alias=AliasChoices("type", "ann_type"))
     label: Optional[str] = None
     data: Dict[str, Any] = Field(default_factory=dict)
     confidence: Optional[float] = None
@@ -57,8 +63,8 @@ class Subject(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     subject_id: str = ""
     patient_ref: Optional[str] = None
-    hospital_ids: Any = Field(default_factory=dict)
-    metadata_: Dict[str, Any] = Field(default_factory=dict, alias="metadata_")
+    hospital_ids: Dict[str, Any] = Field(default_factory=dict)
+    metadata_: Dict[str, Any] = Field(default_factory=dict, validation_alias=AliasChoices("metadata_", "metadata"), alias="metadata_")
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -70,7 +76,7 @@ class Session(BaseModel):
     subject_id: str = ""
     session_label: Optional[str] = None
     scan_date: Optional[datetime] = None
-    metadata_: Dict[str, Any] = Field(default_factory=dict, alias="metadata_")
+    metadata_: Dict[str, Any] = Field(default_factory=dict, validation_alias=AliasChoices("metadata_", "metadata"), alias="metadata_")
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -82,9 +88,12 @@ class Task(BaseModel):
     action: str = ""
     status: str = "queued"
     progress: float = 0
+    resource_ids: List[str] = Field(default_factory=list)
+    params: Dict[str, Any] = Field(default_factory=dict)
     result: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
     created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
 
 
@@ -106,8 +115,10 @@ class Modality(BaseModel):
     directory: str = ""
     description: Optional[str] = None
     extensions: List[str] = Field(default_factory=list)
+    required_files: List[str] = Field(default_factory=list)
     category: str = "other"
     is_system: bool = False
+    created_at: Optional[datetime] = None
 
 
 class UploadInit(BaseModel):
