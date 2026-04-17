@@ -121,6 +121,16 @@ class VnaClient:
             return value.value
         return value
 
+    @classmethod
+    def _resource_source_value(cls, value: str | SourceType | None) -> Optional[str]:
+        normalized = cls._enum_value(value)
+        if normalized is None:
+            return None
+        return {
+            "dicom": "dicom_only",
+            "bids": "bids_only",
+        }.get(normalized, normalized)
+
     @staticmethod
     def _label_items(labels: Optional[dict[str, Optional[str]]]) -> list[dict[str, str]]:
         if not labels:
@@ -149,7 +159,7 @@ class VnaClient:
         if patient_ref is not None:
             body["patient_ref"] = patient_ref
         if source_type is not None:
-            body["source_type"] = cls._enum_value(source_type)
+            body["source_type"] = cls._resource_source_value(source_type)
         if dicom_study_uid is not None:
             body["dicom_study_uid"] = dicom_study_uid
         if dicom_series_uid is not None:
@@ -210,7 +220,7 @@ class VnaClient:
         if data_type is not None:
             params["data_type"] = self._enum_value(data_type)
         if source_type is not None:
-            params["source_type"] = self._enum_value(source_type)
+            params["source_type"] = self._resource_source_value(source_type)
         resp = self._request("GET", "/api/v1/resources", params=params)
         return QueryResult.model_validate(resp.json())
 
@@ -270,8 +280,7 @@ class VnaClient:
         resp = self._request("POST", "/api/v1/resources", json=body)
         resource = Resource.model_validate(resp.json())
         if labels:
-            self.set_labels(resource.resource_id, labels)
-            return self.get_resource(resource.resource_id)
+            resource.labels = self.set_labels(resource.resource_id, labels)
         return resource
 
     def update_resource(
@@ -312,8 +321,7 @@ class VnaClient:
         resp = self._request("PATCH", f"/api/v1/resources/{resource_id}", json=body)
         resource = Resource.model_validate(resp.json())
         if labels is not None:
-            self.set_labels(resource_id, labels)
-            return self.get_resource(resource_id)
+            resource.labels = self.set_labels(resource_id, labels)
         return resource
 
     def delete_resource(self, resource_id: str) -> dict[str, Any]:
@@ -457,6 +465,8 @@ class VnaClient:
         resp = self._request("GET", "/api/v1/labels")
         data = resp.json()
         items = data.get("items", data) if isinstance(data, dict) else data
+        if all(isinstance(item, dict) and "count" in item for item in items):
+            return [TagInfo.model_validate(item) for item in items]
         counts: dict[tuple[str, Optional[str]], int] = {}
         for item in items:
             key = item.get("tag_key")
@@ -476,12 +486,7 @@ class VnaClient:
         resp = self._request(
             "POST",
             "/api/v1/labels/batch",
-            json={
-                "operations": [
-                    self._serialize_batch_operation(op)
-                    for op in operations
-                ]
-            },
+            json={"operations": self._serialize_batch_operations(operations)},
         )
         return resp.json()
 
@@ -514,7 +519,7 @@ class VnaClient:
         if data_type is not None:
             body["data_type"] = self._enum_value(data_type)
         if source_type is not None:
-            body["source_type"] = self._enum_value(source_type)
+            body["source_type"] = self._resource_source_value(source_type)
         if labels:
             body["labels"] = self._label_items(labels)
         if search is not None:
@@ -1066,6 +1071,22 @@ class VnaClient:
         )
         return resp.json()
 
+    def _serialize_batch_operations(self, operations: list[BatchLabelOperation]) -> list[dict[str, Any]]:
+        serialized: list[dict[str, Any]] = []
+        for operation in operations:
+            if operation.operation == "remove" and operation.remove:
+                serialized.extend(
+                    {
+                        "action": "remove",
+                        "resource_id": operation.resource_id,
+                        "tag_key": key,
+                    }
+                    for key in operation.remove
+                )
+                continue
+            serialized.append(self._serialize_batch_operation(operation))
+        return serialized
+
     def _serialize_batch_operation(self, operation: BatchLabelOperation) -> dict[str, Any]:
         if operation.operation == "set":
             return {
@@ -1080,12 +1101,6 @@ class VnaClient:
                 "labels": self._label_items(operation.add or operation.labels),
             }
         if operation.operation == "remove":
-            if operation.remove:
-                return {
-                    "action": "remove",
-                    "resource_id": operation.resource_id,
-                    "tag_key": operation.remove[0],
-                }
             labels = operation.labels or {}
             first_key, first_value = next(iter(labels.items()))
             return {

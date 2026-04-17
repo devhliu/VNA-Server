@@ -33,10 +33,21 @@ router = APIRouter(prefix="/api/store", tags=["Store"])
 @router.post("/init", response_model=UploadInitResponse)
 async def init_upload(req: UploadInitRequest):
     """Initialize a chunked upload session."""
+    if req.chunk_size is not None and (
+        req.chunk_size <= 0 or req.chunk_size > settings.chunk_size
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"chunk_size must be between 1 and {settings.chunk_size} bytes"
+            ),
+        )
+
     state = await upload_manager.init_upload(
         file_name=req.file_name,
         file_size=req.file_size,
         modality=req.modality,
+        chunk_size=req.chunk_size,
         subject_id=req.subject_id,
         session_id=req.session_id,
         source=req.source,

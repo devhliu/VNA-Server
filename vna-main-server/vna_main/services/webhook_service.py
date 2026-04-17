@@ -186,16 +186,16 @@ class WebhookDelivery:
                     content=payload_json,
                     headers=headers,
                 )
-                    success = 200 <= resp.status_code < 300
-                    return {
-                        "delivery_id": delivery_id,
-                        "status_code": resp.status_code,
-                        "success": success,
-                        "attempt": attempt + 1,
-                        "error": None
-                        if success
-                        else f"HTTP {resp.status_code}: {resp.text[:200]}",
-                    }
+                success = 200 <= resp.status_code < 300
+                return {
+                    "delivery_id": delivery_id,
+                    "status_code": resp.status_code,
+                    "success": success,
+                    "attempt": attempt + 1,
+                    "error": None
+                    if success
+                    else f"HTTP {resp.status_code}: {resp.text[:200]}",
+                }
             except (httpx.HTTPError, httpx.TimeoutException, OSError, ValueError) as e:
                 logger.error("Webhook delivery attempt %d failed for %s: %s", attempt + 1, sub.url, e, exc_info=True)
                 last_error = str(e)

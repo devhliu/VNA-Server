@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.pool import StaticPool
 
 from bids_server.db.session import get_db
-from bids_server.models.database import Base, WebhookDelivery
+from bids_server.models.database import Base, Webhook, WebhookDelivery
 from bids_server.services.task_service import task_service
 
 # Test database engine (SQLite in-memory, FK disabled)
@@ -107,6 +107,9 @@ async def db_session():
     try:
         yield session
         await session.commit()
+    except Exception:
+        await session.rollback()
+        raise
     finally:
         await session.close()
 
@@ -119,11 +122,24 @@ async def client():
         yield ac
 
 
+async def _seed_webhook(db_session, webhook_id: str, target_url: str) -> Webhook:
+    webhook = Webhook(
+        webhook_id=webhook_id,
+        url=target_url,
+        events=["resource.created"],
+        active=True,
+    )
+    db_session.add(webhook)
+    await db_session.flush()
+    return webhook
+
+
 @pytest_asyncio.fixture
 async def seeded_failed_delivery(db_session):
+    webhook = await _seed_webhook(db_session, "whk-test", "http://example.test/hook")
     delivery = WebhookDelivery(
-        webhook_id="whk-test",
-        target_url="http://example.test/hook",
+        webhook_id=webhook.webhook_id,
+        target_url=webhook.url,
         event="resource.created",
         payload={"event": "resource.created", "data": {"id": "x"}},
         status="failed",
@@ -138,10 +154,13 @@ async def seeded_failed_delivery(db_session):
 @pytest_asyncio.fixture
 async def seeded_boundary_retry_state(db_session):
     for idx in range(10):
+        webhook = await _seed_webhook(
+            db_session, f"whk-{idx}", f"http://example.test/{idx}"
+        )
         db_session.add(
             WebhookDelivery(
-                webhook_id=f"whk-{idx}",
-                target_url=f"http://example.test/{idx}",
+                webhook_id=webhook.webhook_id,
+                target_url=webhook.url,
                 event="resource.created",
                 payload={"event": "resource.created", "data": {"idx": idx}},
                 status="retrying",
@@ -162,10 +181,13 @@ async def seeded_boundary_retry_state(db_session):
 @pytest_asyncio.fixture
 async def seeded_retry_backlog(db_session):
     for idx in range(11):
+        webhook = await _seed_webhook(
+            db_session, f"whk-r-{idx}", f"http://example.test/retry/{idx}"
+        )
         db_session.add(
             WebhookDelivery(
-                webhook_id=f"whk-r-{idx}",
-                target_url=f"http://example.test/retry/{idx}",
+                webhook_id=webhook.webhook_id,
+                target_url=webhook.url,
                 event="resource.created",
                 payload={"event": "resource.created", "data": {"idx": idx}},
                 status="retrying",

@@ -29,6 +29,7 @@ class UploadManager:
         file_name: str,
         file_size: int,
         modality: str,
+        chunk_size: Optional[int] = None,
         subject_id: Optional[str] = None,
         session_id: Optional[str] = None,
         source: str = "user_upload",
@@ -38,7 +39,7 @@ class UploadManager:
     ) -> dict:
         """Initialize a new upload session."""
         upload_id = f"upl-{uuid.uuid4().hex[:12]}"
-        chunk_size = settings.chunk_size
+        chunk_size = chunk_size or settings.chunk_size
         total_chunks = (file_size + chunk_size - 1) // chunk_size
 
         upload_dir = self._upload_dir(upload_id)

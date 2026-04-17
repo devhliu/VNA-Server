@@ -102,7 +102,8 @@ services:
       ORTHANC_WEB_VIEWER_PLUGIN_ENABLED: "true"
       ORTHANC_EXPLORER_2_ENABLED: "true"
       # Use filesystem storage for DICOM files instead of PostgreSQL (better for large datasets)
-      ORTHANC__POSTGRESQL__ENABLE_STORAGE: "false"
+      ORTHANC__STORAGE_DIRECTORY: "/var/lib/orthanc/storage"
+      ORTHANC__POSTGRESQL__ENABLESTORAGE: "false"
     volumes:
       - orthanc_data:/var/lib/orthanc/db
       - orthanc_storage:/var/lib/orthanc/storage
@@ -136,7 +137,6 @@ services:
       ENABLE_BACKGROUND_WORKER: ${ENABLE_BACKGROUND_WORKER}
       WORKER_POLL_INTERVAL: ${WORKER_POLL_INTERVAL}
       BIDS_API_KEY: ${BIDS_API_KEY}
-      MAIN_SERVER_SYNC_URL: "http://main-server:8000/api/v1/sync/events/bids"
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import httpx; r=httpx.get('http://localhost:8080/health'); r.raise_for_status()\""]
       interval: 10s

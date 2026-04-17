@@ -75,7 +75,7 @@ Orthanc 使用 PostgreSQL 作为索引数据库（DICOM 文件仍存储在本地
 | EnableStorage | false | DICOM 文件存储在文件系统 |
 | Host | postgres | PostgreSQL 服务地址 |
 | Port | 5432 | PostgreSQL 端口 |
-| Database | postgres | 数据库名 |
+| Database | orthanc | 数据库名 |
 | Username | vna | 数据库用户 |
 | Lock | false | 支持多 Orthanc 实例 |
 | EnableSsl | false | 不使用 SSL |
@@ -102,11 +102,12 @@ dicom-server:
     ORTHANC__AUTHENTICATION_ENABLED: "true"
     ORTHANC__REMOTE_ACCESS_ALLOWED: "true"
     ORTHANC__STABLE_AGE: "60"
+    ORTHANC__STORAGE_DIRECTORY: "/var/lib/orthanc/storage"
     ORTHANC__POSTGRESQL__ENABLEINDEX: "true"
     ORTHANC__POSTGRESQL__ENABLESTORAGE: "false"
     ORTHANC__POSTGRESQL__HOST: "postgres"
     ORTHANC__POSTGRESQL__PORT: "5432"
-    ORTHANC__POSTGRESQL__DATABASE: "postgres"
+    ORTHANC__POSTGRESQL__DATABASE: "orthanc"
     ORTHANC__POSTGRESQL__USERNAME: "vna"
     ORTHANC__POSTGRESQL__PASSWORD: "vna"
     ORTHANC__POSTGRESQL__LOCK: "false"
@@ -117,6 +118,7 @@ dicom-server:
     ORTHANC_EXPLORER_2_ENABLED: "true"
   volumes:
     - orthanc_data:/var/lib/orthanc/db
+    - orthanc_storage:/var/lib/orthanc/storage
   depends_on:
     postgres:
       condition: service_healthy

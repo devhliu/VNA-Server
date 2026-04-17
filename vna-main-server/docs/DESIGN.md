@@ -26,7 +26,7 @@ The VNA Main Server is the **central index and routing layer** in a three-compon
     ┌─────┴──────┐   ┌────┴─────┐    ┌─────┴──────┐
     │ DICOM      │   │ BIDS     │    │ Unified    │
     │ Server     │   │ Server   │    │ API        │
-    │ (Orthanc)  │   │          │    │ /v1/*      │
+    │ (Orthanc)  │   │          │    │ /api/v1/*  │
     └────────────┘   └──────────┘    └────────────┘
 ```
 
@@ -105,9 +105,9 @@ Tracks change events from sub-servers for eventual consistency.
 
 ## API Reference
 
-All endpoints are under `/v1`.
+All public endpoints are under `/api/v1`.
 
-### Resources (`/v1/resources`)
+### Resources (`/api/v1/resources`)
 
 | Method | Path          | Description                    |
 |--------|---------------|--------------------------------|
@@ -117,7 +117,7 @@ All endpoints are under `/v1`.
 | PUT    | `/{id}`       | Update resource mapping        |
 | DELETE | `/{id}`       | Delete from index              |
 
-### Patients (`/v1/patients`)
+### Patients (`/api/v1/patients`)
 
 | Method | Path              | Description                    |
 |--------|-------------------|--------------------------------|
@@ -127,7 +127,7 @@ All endpoints are under `/v1`.
 | PUT    | `/{patient_ref}`  | Update mapping                 |
 | DELETE | `/{patient_ref}`  | Delete mapping                 |
 
-### Labels (`/v1/labels`)
+### Labels (`/api/v1/labels`)
 
 | Method | Path                | Description                    |
 |--------|---------------------|--------------------------------|
@@ -137,13 +137,13 @@ All endpoints are under `/v1`.
 | PATCH  | `/resource/{id}`    | Add/update labels              |
 | POST   | `/batch`            | Batch label operations         |
 
-### Query (`/v1/query`)
+### Query (`/api/v1/query`)
 
 | Method | Path  | Description                         |
 |--------|-------|-------------------------------------|
 | POST   | `/`   | Unified query across DICOM + BIDS   |
 
-### Sync (`/v1/sync`)
+### Sync (`/api/v1/sync`)
 
 | Method | Path        | Description                       |
 |--------|-------------|-----------------------------------|
@@ -152,8 +152,17 @@ All endpoints are under `/v1`.
 | POST   | `/trigger`  | Trigger manual sync               |
 | POST   | `/event`    | Receive event from sub-server     |
 | GET    | `/events`   | List sync events                  |
+| POST   | `/verify`   | Verify cross-service consistency  |
+| POST   | `/rebuild`  | Rebuild the main index            |
 
-### Health (`/v1/health`)
+### Internal (`/api/v1/internal`)
+
+| Method | Path          | Description                          |
+|--------|---------------|--------------------------------------|
+| GET    | `/status`     | Internal readiness endpoint          |
+| POST   | `/sync/dicom` | Receive Orthanc DICOM sync callbacks |
+
+### Health (`/api/v1/health`)
 
 | Method | Path | Description                          |
 |--------|------|--------------------------------------|
@@ -165,26 +174,26 @@ All endpoints are under `/v1`.
 
 The sync system follows an **event-driven push model**:
 
-1. **Sub-servers push events** — When DICOM or BIDS servers create/update/delete data, they POST to `/v1/sync/event`
+1. **Sub-servers push events** — BIDS and SDK-originated sync clients POST to `/api/v1/sync/event`, while the Orthanc Lua callback posts DICOM study events to `/api/v1/internal/sync/dicom`
 2. **Events are queued** — Events are stored in `sync_events` with `processed = false`
 3. **Processing** — The Main Server processes events to update the resource index:
    - `created` → Add to resource_index
    - `updated` → Update metadata
    - `deleted` → Remove from index (or mark as deleted)
-4. **Manual sync** — `POST /v1/sync/trigger` initiates a pull-based sync for reconciliation
-5. **Server registration** — Sub-servers register via `/v1/sync/register` for tracking
+4. **Manual sync** — `POST /api/v1/sync/trigger` initiates a pull-based sync for reconciliation
+5. **Server registration** — Sub-servers register via `/api/v1/sync/register` for tracking
 
 ### Event Flow
 
 ```
 DICOM Server                    Main Server                    BIDS Server
      │                               │                              │
-     │── POST /v1/sync/event ───────>│                              │
-     │   {source_db: "dicom",        │                              │
-     │    event_type: "created",     │── Store as pending ──>       │
-     │    resource_id: "res-xxx"}    │                              │
+     │── POST /api/v1/internal/sync/dicom ─>│                       │
+     │   {event_type: "study_stable",       │                       │
+     │    study_uid: "...",                 │── Store as pending ──>│
+     │    orthanc_id: "..."}                │                       │
      │                               │                              │
-     │                               │<── POST /v1/sync/event ─────│
+     │                               │<── POST /api/v1/sync/event ─│
      │                               │    {source_db: "bids",...}   │
      │                               │                              │
      │                               │── Process pending ──>        │
@@ -205,21 +214,23 @@ When a resource exists in both DICOM and BIDS (e.g., a converted NIfTI from DICO
 ### Development
 
 ```bash
-pip install -r requirements.txt
+pip install -e ../vna-common
+pip install -r requirements.txt -r requirements-dev.txt
+export VNA_API_KEY=dev-key REQUIRE_AUTH=false
 uvicorn vna_main.main:app --reload
 ```
 
 ### Docker
 
 ```bash
-# From project root (proj_vna/)
-docker-compose up --build
+# From the repository root
+docker compose up --build
 ```
 
 ### Testing
 
 ```bash
-pytest tests/ -v
+TESTING=true REQUIRE_AUTH=false python -m pytest tests/ -v
 ```
 
 ---

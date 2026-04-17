@@ -203,7 +203,9 @@ def test_set_labels(client: VnaClient) -> None:
     )
     result = client.set_labels("r1", {"modality": "CT"})
     assert result[0].value == "CT"
-    assert route.calls[0].request.content == b'{"labels":[{"tag_key":"modality","tag_value":"CT"}]}'
+    assert json.loads(route.calls[0].request.content) == {
+        "labels": [{"tag_key": "modality", "tag_value": "CT"}]
+    }
 
 
 @respx.mock
@@ -259,6 +261,16 @@ def test_list_all_tags(client: VnaClient) -> None:
 
 
 @respx.mock
+def test_list_all_tags_uses_server_counts(client: VnaClient) -> None:
+    respx.get(f"{BASE_URL}/api/v1/labels").mock(
+        return_value=Response(200, json={"items": [{"tag_key": "modality", "tag_value": "MRI", "count": 7}]})
+    )
+    result = client.list_all_tags()
+    assert len(result) == 1
+    assert result[0].count == 7
+
+
+@respx.mock
 def test_list_all_tags_dict_response(client: VnaClient) -> None:
     respx.get(f"{BASE_URL}/api/v1/labels").mock(
         return_value=Response(200, json={"items": [{"tag_key": "t1", "tag_value": "v1"}]})
@@ -278,6 +290,41 @@ def test_batch_label(client: VnaClient) -> None:
     ]
     result = client.batch_label(ops)
     assert result["processed"] == 2
+
+
+@respx.mock
+def test_batch_label_expands_multiple_removes(client: VnaClient) -> None:
+    route = respx.post(f"{BASE_URL}/api/v1/labels/batch").mock(
+        return_value=Response(200, json={"processed": 2})
+    )
+    ops = [BatchLabelOperation(resource_id="r1", operation="remove", remove=["k1", "k2"])]
+    result = client.batch_label(ops)
+    assert result["processed"] == 2
+    assert json.loads(route.calls[0].request.content) == {
+        "operations": [
+            {"action": "remove", "resource_id": "r1", "tag_key": "k1"},
+            {"action": "remove", "resource_id": "r1", "tag_key": "k2"},
+        ]
+    }
+
+
+@respx.mock
+def test_register_resource_normalizes_legacy_source_type(client: VnaClient) -> None:
+    route = respx.post(f"{BASE_URL}/api/v1/resources").mock(
+        return_value=Response(201, json={
+            "resource_id": "new-2",
+            "patient_ref": "p1",
+            "source_type": "dicom_only",
+            "data_type": "dicom",
+            "labels": [],
+            "metadata": {},
+            "created_at": "2026-01-01T00:00:00Z",
+            "updated_at": "2026-01-01T00:00:00Z",
+        })
+    )
+    result = client.register_resource(patient_ref="p1", source_type=SourceType.DICOM)
+    assert result.source_type == "dicom_only"
+    assert json.loads(route.calls[0].request.content)["source_type"] == "dicom_only"
 
 
 # ─── Query ─────────────────────────────────────────────────────────────────────

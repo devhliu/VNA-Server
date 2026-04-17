@@ -100,6 +100,7 @@ class PatientService:
                 for r in patient.resources
             ],
             "created_at": patient.created_at.isoformat() if patient.created_at else None,
+            "updated_at": patient.updated_at.isoformat() if patient.updated_at else None,
         }
         
         if use_cache:

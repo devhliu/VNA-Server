@@ -47,9 +47,9 @@ async with AsyncBidsClient(base_url="http://bids-server:8080") as client:
 
 ### Data Transfer
 
-#### `upload(file_path, subject_id, session_id, modality, labels, metadata, progress_callback)`
+#### `upload(file_path, subject_id, session_id=None, modality, labels, metadata, progress_callback)`
 
-Upload a single file. Supports progress tracking via callback:
+Upload a single file. `session_id` is optional for subject-level uploads. Supports progress tracking via callback:
 
 ```python
 def on_progress(bytes_read, total):
@@ -58,14 +58,13 @@ def on_progress(bytes_read, total):
 resource = client.upload(
     "T1w.nii.gz",
     subject_id="sub-01",
-    session_id="ses-01",
     modality="anat",
     labels=["quality:good"],
     progress_callback=on_progress,
 )
 ```
 
-#### `upload_chunked(file_path, subject_id, session_id, modality, chunk_size, ...)`
+#### `upload_chunked(file_path, subject_id, session_id=None, modality, chunk_size, ...)`
 
 Chunked upload for large files. Breaks file into chunks and uploads sequentially:
 
@@ -221,7 +220,7 @@ client.register_modality("pet", "pet", [".nii.gz"])
 
 ```bash
 # Basic upload
-bids-cli upload scan.nii.gz --subject sub-01 --session ses-01 --modality anat --server http://localhost:8080
+bids-cli upload scan.nii.gz --subject sub-01 --modality anat --server http://localhost:8080
 
 # With labels and JSON output
 bids-cli upload scan.nii.gz --subject sub-01 --session ses-01 --modality anat --server http://localhost:8080 --labels "quality:good,scanner:Siemens" --json
@@ -375,7 +374,6 @@ def upload_with_progress(filepath, client):
     resource = client.upload(
         filepath,
         subject_id="sub-01",
-        session_id="ses-01",
         modality="anat",
         progress_callback=on_progress,
     )

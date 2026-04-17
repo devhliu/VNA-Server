@@ -1,16 +1,21 @@
 """Database connection and session management."""
 import logging
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import AsyncAdaptedQueuePool, NullPool
 
 from bids_server.config import settings
 
 logger = logging.getLogger(__name__)
 
-engine_kwargs = {
-    "echo": settings.database_echo,
-    "pool_size": 20,
-    "max_overflow": 10,
-}
+engine_kwargs = {"echo": settings.database_echo}
+
+if "sqlite" in settings.database_url:
+    engine_kwargs["poolclass"] = NullPool
+    engine_kwargs["connect_args"] = {"check_same_thread": False}
+else:
+    engine_kwargs["poolclass"] = AsyncAdaptedQueuePool
+    engine_kwargs["pool_size"] = 20
+    engine_kwargs["max_overflow"] = 10
 
 engine = create_async_engine(settings.database_url, **engine_kwargs)
 

@@ -211,6 +211,7 @@ async def delete_resource(
     resource = await svc.get_resource(resource_id)
     if resource is None:
         raise HTTPException(404, "Resource not found")
+    resource_data = _serialize(resource)
     
     ok = await svc.delete_resource(resource_id)
     if not ok:
@@ -222,7 +223,10 @@ async def delete_resource(
         action="delete",
         resource_type="resource",
         resource_id=resource_id,
-        details={"source_type": resource.source_type, "data_type": resource.data_type}
+        details={
+            "source_type": resource_data["source_type"],
+            "data_type": resource_data["data_type"],
+        }
     )
     
     return {"deleted": resource_id}

@@ -156,6 +156,7 @@ class AnnotationResponse(BaseModel):
 class UploadInitRequest(BaseModel):
     file_name: str
     file_size: int
+    chunk_size: Optional[int] = None
     modality: str
     subject_id: Optional[str] = None
     session_id: Optional[str] = None

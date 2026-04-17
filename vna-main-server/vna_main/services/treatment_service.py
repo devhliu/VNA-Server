@@ -88,4 +88,5 @@ class TreatmentService:
             "facility": e.facility,
             "metadata": e.metadata_,
             "created_at": e.created_at.isoformat() if e.created_at else None,
+            "updated_at": e.updated_at.isoformat() if e.updated_at else None,
         }

@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Optional
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
 
 class SourceType(str, Enum):
@@ -19,6 +19,15 @@ class SourceType(str, Enum):
 class DataType(str, Enum):
     """Resource data type."""
 
+    DICOM = "dicom"
+    NIFTI = "nifti"
+    NRRD = "nrrd"
+    PNG = "png"
+    JPEG = "jpeg"
+    CSV = "csv"
+    TSV = "tsv"
+    JSON = "json"
+    PDF = "pdf"
     IMAGING = "imaging"
     DERIVATIVE = "derivative"
     BIDS_RAW = "bids_raw"
@@ -45,7 +54,7 @@ class Resource(BaseModel):
     resource_id: str
     patient_ref: Optional[str] = None
     source_type: str
-    data_type: DataType = DataType.IMAGING
+    data_type: str = DataType.DICOM.value
     dicom_study_uid: Optional[str] = None
     dicom_series_uid: Optional[str] = None
     dicom_sop_uid: Optional[str] = None
@@ -137,6 +146,17 @@ class HealthStatus(BaseModel):
     uptime_seconds: Optional[float] = None
     components: dict[str, Any] = Field(default_factory=dict)
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    @model_validator(mode="before")
+    @classmethod
+    def _populate_component_fields(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        if data.get("database") is None:
+            database_component = data.get("components", {}).get("database")
+            if isinstance(database_component, dict):
+                data = {**data, "database": database_component.get("status")}
+        return data
 
 
 class ServerRegistration(BaseModel):

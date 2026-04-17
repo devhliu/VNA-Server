@@ -128,6 +128,7 @@ class ResourceService:
             "content_hash": resource.content_hash,
             "metadata": resource.metadata_,
             "created_at": resource.created_at.isoformat() if resource.created_at else None,
+            "updated_at": resource.updated_at.isoformat() if resource.updated_at else None,
         }
         
         if use_cache:
@@ -165,7 +166,21 @@ class ResourceService:
         resource = await self.session.get(ResourceIndex, resource_id)
         if resource is None:
             return None
-        updatable_fields = {"source_type", "data_type", "patient_ref", "dicom_study_uid", "bids_path", "metadata_"}
+        updatable_fields = {
+            "patient_ref",
+            "source_type",
+            "dicom_study_uid",
+            "dicom_series_uid",
+            "dicom_sop_uid",
+            "bids_subject_id",
+            "bids_session_id",
+            "bids_path",
+            "data_type",
+            "file_name",
+            "file_size",
+            "content_hash",
+            "metadata_",
+        }
         for key, value in data.items():
             if key == "metadata":
                 key = "metadata_"

@@ -4,7 +4,7 @@ Python SDK and CLI for the BIDS Server (BIDSweb) API. Provides both synchronous 
 
 ## Features
 
-- **Full API coverage** — Upload, download, query, labels, annotations, subjects, sessions, tasks, webhooks, and system operations
+- **Broad API coverage** — Upload, download, query, labels, annotations, subjects, sessions, tasks, webhooks, and system operations
 - **Sync & Async** — `BidsClient` for synchronous code, `AsyncBidsClient` for async/await
 - **Type-safe** — Full type hints with Pydantic models
 - **CLI included** — `bids-cli` for command-line operations
@@ -35,11 +35,10 @@ from bids_sdk import BidsClient
 # Initialize client
 client = BidsClient(base_url="http://localhost:8080", api_key="optional-key")
 
-# Upload a file
+# Upload a file (`session_id` is optional)
 resource = client.upload(
     "T1w.nii.gz",
     subject_id="sub-01",
-    session_id="ses-01",
     modality="anat",
     labels=["quality:good"],
 )
@@ -88,10 +87,9 @@ asyncio.run(main())
 ### CLI
 
 ```bash
-# Upload a file
+# Upload a file without a session
 bids-cli upload scan.nii.gz \
   --subject sub-01 \
-  --session ses-01 \
   --modality anat \
   --server http://localhost:8080 \
   --labels "quality:good" \
@@ -139,8 +137,8 @@ bids-cli rebuild --server http://localhost:8080 --clear-existing --json
 
 | Method | Description |
 |--------|-------------|
-| `upload(file_path, subject_id, session_id, modality, ...)` | Upload single file |
-| `upload_chunked(file_path, subject_id, session_id, modality, ...)` | Chunked upload for large files |
+| `upload(file_path, subject_id, session_id=None, modality, ...)` | Upload single file |
+| `upload_chunked(file_path, subject_id, session_id=None, modality, ...)` | Chunked upload for large files |
 | `download(resource_id, output_path)` | Download file |
 | `download_stream(resource_id, output_path, range_start, range_end)` | Range download |
 | `batch_download(resource_ids, output_path)` | Download multiple files as zip |
@@ -201,6 +199,9 @@ bids-cli rebuild --server http://localhost:8080 --clear-existing --json
 | `rebuild(target, clear_existing)` | Rebuild database |
 | `list_modalities()` | List modalities |
 | `register_modality(id, directory, extensions)` | Register modality |
+| `validate_file(path, strict)` | Validate a local file or server-side BIDS path |
+
+`validate_file()` automatically chooses the right server endpoint: local files are uploaded for validation, while existing server-side paths are validated in place.
 
 ## Error Handling
 

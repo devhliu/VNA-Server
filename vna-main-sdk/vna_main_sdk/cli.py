@@ -226,7 +226,7 @@ def patients_list(ctx: click.Context, limit: int, offset: int) -> None:
             output_json(ctx, result)
         else:
             total = result.get("total", 0)
-            pts = result.get("patients", [])
+            pts = result.get("items", result.get("patients", []))
             click.echo(f"Total: {total}, showing {len(pts)} patients")
             for p in pts:
                 click.echo(f"  {p.get('patient_ref', '?')}")
@@ -455,8 +455,10 @@ def health(ctx: click.Context) -> None:
             output_json(ctx, result)
         else:
             click.echo(f"Status: {result.status}")
-            click.echo(f"Version: {result.version}")
-            click.echo(f"Database: {result.database}")
+            if result.version is not None:
+                click.echo(f"Version: {result.version}")
+            if result.database is not None:
+                click.echo(f"Database: {result.database}")
     except VnaClientError as e:
         _handle_error(ctx, e)
 

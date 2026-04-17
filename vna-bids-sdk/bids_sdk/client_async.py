@@ -105,7 +105,7 @@ class AsyncBidsClient:
         self,
         file_path: Union[str, Path],
         subject_id: str,
-        session_id: str,
+        session_id: Optional[str],
         modality: str,
         labels: Optional[Union[List[str], Dict[str, Any]]] = None,
         metadata: Optional[Dict[str, Any]] = None,
@@ -119,9 +119,10 @@ class AsyncBidsClient:
         file_size = path.stat().st_size
         data: Dict[str, Any] = {
             "subject_id": subject_id,
-            "session_id": session_id,
             "modality": modality,
         }
+        if session_id is not None:
+            data["session_id"] = session_id
         normalized_labels = _normalize_label_map(labels)
         if normalized_labels:
             data["labels"] = json.dumps(normalized_labels)
@@ -143,7 +144,7 @@ class AsyncBidsClient:
         self,
         file_path: Union[str, Path],
         subject_id: str,
-        session_id: str,
+        session_id: Optional[str],
         modality: str,
         chunk_size: int = 5 * 1024 * 1024,
         labels: Optional[Union[List[str], Dict[str, Any]]] = None,
@@ -157,20 +158,18 @@ class AsyncBidsClient:
 
         file_size = path.stat().st_size
 
-        init_response = await self._request(
-            "POST",
-            "/api/store/init",
-            json={
-                "file_name": path.name,
-                "file_size": file_size,
-                "chunk_size": chunk_size,
-                "subject_id": subject_id,
-                "session_id": session_id,
-                "modality": modality,
-                "labels": _normalize_label_map(labels),
-                "metadata": metadata,
-            },
-        )
+        init_body: Dict[str, Any] = {
+            "file_name": path.name,
+            "file_size": file_size,
+            "chunk_size": chunk_size,
+            "subject_id": subject_id,
+            "modality": modality,
+            "labels": _normalize_label_map(labels),
+            "metadata": metadata,
+        }
+        if session_id is not None:
+            init_body["session_id"] = session_id
+        init_response = await self._request("POST", "/api/store/init", json=init_body)
         init_data = init_response.json()
         upload_id = init_data.get("upload_id", init_data.get("id"))
         chunk_size = int(init_data.get("chunk_size", chunk_size))
@@ -273,7 +272,7 @@ class AsyncBidsClient:
 
         try:
             async with self._client.stream(
-                "POST", "/api/objects/batch-download", json={"resource_ids": resource_ids}
+                "POST", "/api/objects/batch-download", json=resource_ids
             ) as response:
                 _raise_for_status(response)
                 total = int(response.headers.get("content-length", 0))
@@ -535,14 +534,13 @@ class AsyncBidsClient:
         self,
         modality_id: str,
         directory: str,
-        extensions: Optional[List[str]] = None,
+        extensions: List[str],
     ) -> Modality:
         body: Dict[str, Any] = {
             "modality_id": modality_id,
             "directory": directory,
+            "extensions": extensions,
         }
-        if extensions:
-            body["extensions"] = extensions
         response = await self._request("POST", "/api/modalities", json=body)
         return Modality(**response.json())
 
@@ -554,8 +552,33 @@ class AsyncBidsClient:
         strict: bool = False,
     ) -> Dict[str, Any]:
         """Validate a BIDS file."""
+        path = Path(filepath)
+        if path.is_file():
+            return await self.validate_upload(path, strict=strict)
+
         body = {"filepath": filepath, "strict": strict}
         response = await self._request("POST", "/api/validation/file", json=body)
+        return response.json()
+
+    async def validate_upload(
+        self,
+        file_path: Union[str, Path],
+        strict: bool = False,
+    ) -> Dict[str, Any]:
+        """Validate a local BIDS file by uploading it to the validation endpoint."""
+        path = Path(file_path)
+        if not path.is_file():
+            raise BidsValidationError(f"File not found: {file_path}")
+
+        with open(path, "rb") as file_obj:
+            file_content = file_obj.read()
+
+        response = await self._request(
+            "POST",
+            "/api/validation/upload",
+            params={"strict": strict},
+            files={"file": (path.name, file_content)},
+        )
         return response.json()
 
     async def get_validation_rules(self) -> Dict[str, Any]:

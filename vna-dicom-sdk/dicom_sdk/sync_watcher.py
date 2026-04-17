@@ -7,6 +7,8 @@ import json
 import logging
 from typing import Any, Callable, Coroutine
 
+import httpx
+
 logger = logging.getLogger(__name__)
 
 
@@ -27,11 +29,13 @@ class ChangeWatcher:
         self,
         dicom_client: Any,
         vna_server_url: str,
+        api_key: str | None = None,
         poll_interval: float = 5.0,
         on_change: Callable[[dict[str, Any]], Coroutine[Any, Any, None]] | None = None,
     ) -> None:
         self.dicom = dicom_client
         self.vna_url = vna_server_url.rstrip("/")
+        self.api_key = api_key
         self.poll_interval = poll_interval
         self._on_change = on_change
         self._running = False
@@ -39,16 +43,26 @@ class ChangeWatcher:
 
     async def _send_event(self, change_type: str, resource_id: str, resource_type: str) -> None:
         """Forward a change event to the VNA Main Server."""
-        import httpx
         event = {
             "source_db": "dicom",
             "event_type": f"resource.{change_type}",
             "resource_id": resource_id,
-            "payload": {"resource_type": resource_type},
+            "payload": {
+                "resource_type": resource_type,
+                "source_type": "dicom_only",
+                "data_type": "dicom",
+            },
         }
+        headers = {}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
-                resp = await client.post(f"{self.vna_url}/v1/sync/event", json=event)
+                resp = await client.post(
+                    f"{self.vna_url}/api/v1/sync/event",
+                    json=event,
+                    headers=headers or None,
+                )
                 if resp.is_success:
                     logger.debug("Sent event to VNA: %s %s", change_type, resource_id)
                 else:
@@ -106,26 +120,38 @@ class SyncWatcher:
         self,
         dicom_client: Any,
         vna_server_url: str,
+        api_key: str | None = None,
         poll_interval: float = 5.0,
     ) -> None:
         self.dicom = dicom_client
         self.vna_url = vna_server_url.rstrip("/")
+        self.api_key = api_key
         self.poll_interval = poll_interval
         self._running = False
         self._last_seq = 0
 
     def _send_event(self, change_type: str, resource_id: str, resource_type: str) -> None:
         """Forward a change event to the VNA Main Server synchronously."""
-        import httpx
         event = {
             "source_db": "dicom",
             "event_type": f"resource.{change_type}",
             "resource_id": resource_id,
-            "payload": {"resource_type": resource_type},
+            "payload": {
+                "resource_type": resource_type,
+                "source_type": "dicom_only",
+                "data_type": "dicom",
+            },
         }
+        headers = {}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
         try:
             with httpx.Client(timeout=10.0) as client:
-                resp = client.post(f"{self.vna_url}/v1/sync/event", json=event)
+                resp = client.post(
+                    f"{self.vna_url}/api/v1/sync/event",
+                    json=event,
+                    headers=headers or None,
+                )
                 if resp.is_success:
                     logger.debug("Sent event to VNA: %s %s", change_type, resource_id)
                 else:

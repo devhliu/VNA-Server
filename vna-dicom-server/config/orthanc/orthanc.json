@@ -16,6 +16,7 @@
   },
   "RestApiEnabled": true,
   "StableAge": 60,
+  "StorageDirectory": "/var/lib/orthanc/storage",
   "StorageCompression": false,
   "LuaScripts": ["/etc/orthanc/lua/sync_to_vna.lua"],
   "HttpTimeout": 30,
@@ -31,7 +32,7 @@
   "_comment_PostgreSQL": "Username and Password should be set via environment variables at container startup. See docker-compose.yml and .env for actual values.",
   "PostgreSQL": {
     "EnableIndex": true,
-    "EnableStorage": true,
+    "EnableStorage": false,
     "Host": "postgres",
     "Port": 5432,
     "Database": "orthanc",

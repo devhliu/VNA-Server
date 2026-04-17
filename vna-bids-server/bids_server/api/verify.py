@@ -81,7 +81,7 @@ async def verify_data(
     # Check filesystem for orphaned files (files without DB records)
     if req.target == "all":
         db_paths = {r.bids_path for r in db_resources}
-        fs_files = storage.scan_bids_tree()
+        fs_files = await storage.scan_bids_tree()
         for f in fs_files:
             if f["bids_path"] not in db_paths:
                 if req.repair:

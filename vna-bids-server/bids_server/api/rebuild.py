@@ -142,6 +142,7 @@ async def rebuild_database(
             metadata_=metadata,
         )
         db.add(resource)
+        await db.flush()
         resources_found += 1
 
         # Extract labels from JSON sidecar

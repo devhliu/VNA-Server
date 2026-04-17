@@ -401,7 +401,7 @@ vna "http://localhost:18000/api/v1/audit/logs?action=create&resource_type=resour
 vna -X POST http://localhost:18000/api/v1/sync/trigger
 
 # Send a sync event
-vna -X POST http://localhost:18000/api/v1/sync/events \
+vna -X POST http://localhost:18000/api/v1/sync/event \
   -d '{
     "source_db": "dicom",
     "event_type": "study_stable",

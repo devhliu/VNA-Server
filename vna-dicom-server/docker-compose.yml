@@ -33,6 +33,7 @@ services:
       ORTHANC_EXPLORER_2_ENABLED: "true"
     volumes:
       - orthanc_data:/var/lib/orthanc/db
+      - orthanc_storage:/var/lib/orthanc/storage
     depends_on:
       postgres:
         condition: service_healthy
@@ -46,3 +47,4 @@ services:
 volumes:
   orthanc_pgdata:
   orthanc_data:
+  orthanc_storage:

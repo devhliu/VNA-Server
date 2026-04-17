@@ -14,7 +14,7 @@
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `ORTHANC__STORAGE_DIRECTORY` | /var/lib/orthanc/db | 文件存储路径 |
+| `ORTHANC__STORAGE_DIRECTORY` | /var/lib/orthanc/storage | 文件存储路径 |
 | `ORTHANC__INDEX_DIRECTORY` | /var/lib/orthanc/db | 索引存储路径 |
 | `ORTHANC__MAXIMUM_STORAGE_SIZE` | 0 | 最大存储(GB)，0=不限 |
 | `ORTHANC__MAXIMUM_PATIENT_COUNT` | 0 | 最大患者数，0=不限 |
@@ -67,6 +67,7 @@ environment:
   ORTHANC__DICOM_ALWAYS_STORE: "true"
   ORTHANC__REST_API_ENABLED: "true"
   ORTHANC__DICOM_WEB__ENABLED: "true"
+  ORTHANC__STORAGE_DIRECTORY: "/var/lib/orthanc/storage"
   ORTHANC__MAXIMUM_STORAGE_SIZE: "0"
   ORTHANC__MAXIMUM_PATIENT_COUNT: "0"
   # PostgreSQL 配置
@@ -77,7 +78,7 @@ environment:
   ORTHANC__POSTGRESQL__USERNAME: "vna"
   ORTHANC__POSTGRESQL__PASSWORD: "vna"
   ORTHANC__POSTGRESQL__ENABLEINDEX: "true"
-  ORTHANC__POSTGRESQL__ENABLESTORAGE: "true"
+  ORTHANC__POSTGRESQL__ENABLESTORAGE: "false"
   ORTHANC__POSTGRESQL__LOCK: "false"
 ```
 
@@ -87,7 +88,7 @@ environment:
 environment:
   ORTHANC__NAME: "VNA-DICOM"
   ORTHANC__AUTHENTICATION_ENABLED: "false"
-  ORTHANC__STORAGE_DIRECTORY: "/var/lib/orthanc/db"
+  ORTHANC__STORAGE_DIRECTORY: "/var/lib/orthanc/storage"
   ORTHANC__INDEX_DIRECTORY: "/var/lib/orthanc/db"
   ORTHANC__DICOM_AET: "VNA-ORTHANC"
   ORTHANC__REST_API_ENABLED: "true"

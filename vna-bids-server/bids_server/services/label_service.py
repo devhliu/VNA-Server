@@ -152,11 +152,11 @@ class LabelService:
 
         # Read existing JSON or create new
         existing = {}
-        if storage.file_exists(json_path):
+        if await storage.file_exists(json_path):
             try:
                 data = await storage.read_file(json_path)
                 existing = json.loads(data)
-            except (json.JSONDecodeError, Exception):
+            except (json.JSONDecodeError, OSError):
                 existing = {}
 
         # Update VNA.labels section

@@ -509,6 +509,21 @@ class TestUploadDownload:
         assert result.resource_id == "res-01"
 
     @respx.mock
+    def test_upload_without_session(self, client, tmp_file):
+        route = respx.post(f"{BASE_URL}/api/store").mock(
+            return_value=httpx.Response(200, json={"resource_id": "res-01"})
+        )
+        client.upload(
+            tmp_file,
+            subject_id="sub-01",
+            session_id=None,
+            modality="anat",
+        )
+        assert route.called
+        body = route.calls[0].request.content.decode("utf-8", errors="ignore")
+        assert 'name="session_id"' not in body
+
+    @respx.mock
     def test_upload_with_labels(self, client, tmp_file):
         route = respx.post(f"{BASE_URL}/api/store").mock(
             return_value=httpx.Response(200, json={"resource_id": "res-01"})
@@ -561,12 +576,36 @@ class TestUploadDownload:
     @respx.mock
     def test_batch_download(self, client, tmp_file):
         output = tmp_file.parent / "batch.zip"
-        respx.post(f"{BASE_URL}/api/objects/batch-download").mock(
+        route = respx.post(f"{BASE_URL}/api/objects/batch-download").mock(
             return_value=httpx.Response(200, content=b"zip data")
         )
         result = client.batch_download(["res-01", "res-02"], output)
+        assert json.loads(route.calls[0].request.content) == ["res-01", "res-02"]
         assert result.exists()
         result.unlink()
+
+    @respx.mock
+    def test_validate_file_uses_upload_endpoint_for_local_files(self, client, tmp_file):
+        route = respx.post(f"{BASE_URL}/api/validation/upload").mock(
+            return_value=httpx.Response(200, json={"valid": True, "issues": []})
+        )
+        result = client.validate_file(str(tmp_file), strict=True)
+        assert route.called
+        assert route.calls[0].request.url.params["strict"] == "true"
+        assert result["valid"] is True
+
+    @respx.mock
+    def test_validate_file_uses_filepath_endpoint_for_remote_paths(self, client):
+        route = respx.post(f"{BASE_URL}/api/validation/file").mock(
+            return_value=httpx.Response(200, json={"valid": True, "issues": []})
+        )
+        result = client.validate_file("/data/bids/sub-01/anat/sub-01_T1w.nii.gz")
+        assert route.called
+        assert json.loads(route.calls[0].request.content) == {
+            "filepath": "/data/bids/sub-01/anat/sub-01_T1w.nii.gz",
+            "strict": False,
+        }
+        assert result["valid"] is True
 
 
 # ------------------------------------------------------------------
@@ -836,13 +875,26 @@ class TestAsyncClient:
     @pytest.mark.asyncio
     async def test_async_batch_download(self, tmp_file):
         output = tmp_file.parent / "async_batch.zip"
-        respx.post(f"{BASE_URL}/api/objects/batch-download").mock(
+        route = respx.post(f"{BASE_URL}/api/objects/batch-download").mock(
             return_value=httpx.Response(200, content=b"zip data")
         )
         async with AsyncBidsClient(base_url=BASE_URL) as c:
             result = await c.batch_download(["r1", "r2"], output)
+            assert json.loads(route.calls[0].request.content) == ["r1", "r2"]
             assert result.exists()
             result.unlink()
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_async_validate_file_uses_upload_endpoint_for_local_files(self, tmp_file):
+        route = respx.post(f"{BASE_URL}/api/validation/upload").mock(
+            return_value=httpx.Response(200, json={"valid": True, "issues": []})
+        )
+        async with AsyncBidsClient(base_url=BASE_URL) as c:
+            result = await c.validate_file(str(tmp_file), strict=True)
+            assert route.called
+            assert route.calls[0].request.url.params["strict"] == "true"
+            assert result["valid"] is True
 
     @respx.mock
     @pytest.mark.asyncio

@@ -1,6 +1,6 @@
 """Search service - PostgreSQL full-text search."""
 
-from sqlalchemy import select, func, or_, and_, text
+from sqlalchemy import select, func, or_, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bids_server.models.database import Resource, Label
@@ -19,7 +19,34 @@ class SearchService:
         offset: int = 0,
     ) -> tuple[list[Resource], int]:
         """Full-text search across resources."""
-        return await self._search_pg(db, query, modality, subject_id, limit, offset)
+        if self._is_postgres(db):
+            return await self._search_pg(db, query, modality, subject_id, limit, offset)
+        return await self._search_fallback(db, query, modality, subject_id, limit, offset)
+
+    @staticmethod
+    def _is_postgres(db: AsyncSession) -> bool:
+        bind = db.get_bind()
+        return bind is not None and bind.dialect.name == "postgresql"
+
+    async def _search_fallback(self, db, query, modality, subject_id, limit, offset):
+        like_query = f"%{query}%"
+        base = select(Resource).where(
+            or_(
+                Resource.file_name.ilike(like_query),
+                Resource.bids_path.ilike(like_query),
+                Resource.modality.ilike(like_query),
+                Resource.search_vector.ilike(like_query),
+            )
+        )
+        if modality:
+            base = base.where(Resource.modality.in_(modality))
+        if subject_id:
+            base = base.where(Resource.subject_id == subject_id)
+        count = (
+            await db.execute(select(func.count()).select_from(base.subquery()))
+        ).scalar() or 0
+        result = await db.execute(base.limit(limit).offset(offset))
+        return list(result.scalars().all()), count
 
     async def _search_pg(self, db, query, modality, subject_id, limit, offset):
         ts_query = func.plainto_tsquery("english", query)
@@ -71,6 +98,11 @@ class SearchService:
                 parts.append(str(label.tag_value))
 
         searchable_text = " ".join(str(p) for p in parts)
+        if not self._is_postgres(db):
+            resource.search_vector = searchable_text
+            await db.flush()
+            return
+
         await db.execute(
             text(
                 "UPDATE resources SET search_vector = to_tsvector('english', :text) "

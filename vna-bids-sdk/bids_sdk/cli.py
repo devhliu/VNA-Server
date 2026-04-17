@@ -65,7 +65,7 @@ def cli() -> None:
 @cli.command()
 @click.argument("file", type=click.Path(exists=True))
 @click.option("--subject", "subject_id", required=True, help="Subject ID")
-@click.option("--session", "session_id", required=True, help="Session ID")
+@click.option("--session", "session_id", default=None, help="Session ID")
 @click.option("--modality", required=True, help="Modality (e.g., anat, func, dwi)")
 @click.option("--server", required=True, help="BIDS server URL")
 @click.option("--api-key", default=None, help="API key for authentication")
@@ -78,7 +78,7 @@ def cli() -> None:
 def upload(
     file: str,
     subject_id: str,
-    session_id: str,
+    session_id: Optional[str],
     modality: str,
     server: str,
     api_key: Optional[str],

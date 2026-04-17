@@ -2,27 +2,24 @@
 
 ## Build, test, and lint commands
 
-### Repo-level shortcuts
+### Repo-level commands
 
-Use the root `Makefile` first when it covers what you need:
+Use the root `Makefile` when it matches the package you are changing:
 
 ```bash
 make setup
-make test
 make test-main
 make test-dicom
 make test-bids
-make test-integration
-make test-e2e
 make lint
 make fmt
 ```
 
-Important coverage detail: `make test` runs the top-level contract-style main-server test plus the DICOM and BIDS SDK suites. It does **not** run `vna-bids-server/tests/`; run that package directly when changing the BIDS service.
+`Makefile` also defines `make test`, `make test-integration`, and `make test-e2e`, but those targets still reference top-level `tests/` files that are not present in the current tree. Prefer the package-specific commands below for reliable runs.
+
+Important naming detail: `make test-bids` runs the **BIDS SDK** suite in `vna-bids-sdk/`, not `vna-bids-server/tests/`.
 
 ### Package-specific commands
-
-Assume the package-specific install steps below have already been run before using the single-test examples.
 
 Main server:
 
@@ -67,8 +64,9 @@ cd vna-bids-sdk && python -m pytest tests/ -v --tb=short
 Single SDK test:
 
 ```bash
-cd vna-bids-sdk
-python -m pytest tests/test_client.py -v
+cd vna-main-sdk && python -m pytest tests/test_client.py -v
+cd vna-dicom-sdk && python -m pytest tests/test_client.py -v
+cd vna-bids-sdk && python -m pytest tests/test_client.py -v
 ```
 
 Frontend:
@@ -84,68 +82,56 @@ npm run dev
 
 There is no frontend test script in `vna-ux/package.json` right now.
 
-### Running services locally
-
-Docker is the default integration path:
+If you need to regenerate frontend API types, the existing script expects the main server to be running directly on port `8000`:
 
 ```bash
-docker compose up -d
-```
-
-For service-only local development without full Dockerized app startup:
-
-```bash
-docker compose up -d postgres redis
-
-cd vna-main-server
-pip install -e ../vna-common
-pip install -r requirements.txt
-export VNA_API_KEY=dev-key REQUIRE_AUTH=false
-export DATABASE_URL="postgresql+asyncpg://vna-admin:password@localhost:18432/vna_main"
-uvicorn vna_main.main:app --host 0.0.0.0 --port 8000 --reload
-
-cd ../vna-bids-server
-pip install -r requirements.txt
-pip install -e ../vna-common
-export BIDS_API_KEY=dev-key REQUIRE_AUTH=false
-export DATABASE_URL="postgresql+asyncpg://vna-admin:password@localhost:18432/bidsserver"
-uvicorn bids_server.main:app --host 0.0.0.0 --port 8080 --reload
+cd vna-ux
+npm run generate-api
 ```
 
 ## High-level architecture
 
 This repository is a multi-service VNA stack for medical imaging research:
 
-- `vna-main-server` is the control plane. It owns the central resource index, patient mapping, projects, labels, monitoring, routing, audit, versioning, and sync endpoints.
-- `vna-bids-server` is the BIDS/file-management plane. It stores files under `BIDS_ROOT`, manages subjects/sessions/resources/labels/annotations, and runs async task + webhook delivery loops on startup when background workers are enabled.
+- `vna-main-server` is the control plane. It owns the central resource index, patient mapping, projects, labels, monitoring, routing, audit, treatments, versions, and sync endpoints.
+- `vna-bids-server` is the BIDS/file-management plane. It stores files under `BIDS_ROOT`, manages subjects/sessions/resources/labels/annotations, loads default modalities on startup, and can run background task + webhook delivery loops.
 - `vna-dicom-server` packages Orthanc plus plugins and acts as the DICOM/PACS node.
-- `vna-ux` is a React/Vite dashboard. In local dev it proxies `/api/v1` to the main server, `/bids-api` to the BIDS server (`/api` after rewrite), and DICOM viewer paths to Orthanc.
+- `vna-ux` is a React/Vite dashboard. In local dev it proxies `/api/v1` to the main server, `/bids-api` to the BIDS server (rewritten to `/api`), and `/dicom-web` and `/ohif` to Orthanc.
 - `vna-common` is shared infrastructure used by both Python services: request ID middleware, API version headers, logging helpers, and common response models.
 
 The important cross-service flow is:
 
 1. Orthanc or the BIDS server emits sync/webhook events.
 2. `vna-main-server` receives them through `/api/v1/sync/*`, then updates the central `ResourceIndex` and related patient/project metadata.
-3. Main-server services call downstream systems through the shared async HTTP client in `vna_main.services.http_client` instead of creating ad hoc clients.
-4. The frontend mostly reads from the main server for browsing/monitoring and pulls file content from the BIDS service for previews/downloads.
+3. Main-server code is expected to call downstream services through `vna_main.services.http_client` instead of creating ad hoc HTTP clients.
+4. The frontend mostly reads browsing and monitoring state from the main server, and pulls file content/previews from the BIDS service.
 
-Deployment ports are easiest to reason about from `docker-compose.yml`:
+Keep the port split straight:
 
-- Main server: container `8000`, host `18000`
-- BIDS server: container `8080`, host `18080`
-- Orthanc HTTP: container `8042`, host `18042`
-- Frontend container: host `13000`
-- Frontend Vite dev server: `18300`
+- Docker/containerized stack: main `18000`, BIDS `18080`, Orthanc HTTP `18042`, frontend `13000`, Postgres `18432`, Redis `18379`
+- Service-only local dev: main `8000`, BIDS `8080`
+- Vite dev server: `18300`
 
 ## Key conventions
 
 ### Auth and settings are enforced at import time
 
-Both FastAPI services construct settings on import and will raise if auth is required but the corresponding API key is missing. Tests and ad hoc scripts usually set `REQUIRE_AUTH=false` (and often `TESTING=true`) **before** importing app modules.
+Both FastAPI services instantiate settings during import and raise immediately if auth is required but the corresponding API key is missing. Tests and ad hoc scripts need to set `REQUIRE_AUTH=false` (and usually `TESTING=true`) **before** importing app modules.
 
-### Top-level pytest config is not the whole test story
+### The top-level test entrypoints are inconsistent
 
-The root `pytest.ini` only points at `vna-main-server/tests` and `vna-bids-server/tests`, while the root `Makefile` also runs top-level contract/E2E tests and SDK suites separately. When changing a package, run that package's tests directly instead of assuming `pytest` from repo root or `make test` covers everything.
+The root `pytest.ini` only targets `vna-main-server/tests` and `vna-bids-server/tests`, while the root `Makefile` still points some targets at top-level `tests/` files that are not in the repository. Do not assume `pytest` from repo root or `make test` covers the package you changed; run the package suite directly.
+
+### The two Python services have different runtime assumptions
+
+- `vna-main-server` defaults to SQLite for local/test usage and only calls `init_db()` automatically for SQLite. In PostgreSQL environments it expects schema management outside app startup.
+- `vna-bids-server` assumes PostgreSQL + filesystem storage, creates writable storage/upload directories, and expects its schema to be managed before startup.
+- Main-server rate limiting is Redis-backed; BIDS-server rate limiting is in-memory.
+
+### Startup behavior matters when changing app lifecycle code
+
+- `vna-main-server` closes its shared HTTP client and cache layer during shutdown.
+- `vna-bids-server` always runs startup reclaim logic and default-modality loading, and only starts the long-running worker/webhook loops when `ENABLE_BACKGROUND_WORKER=true`.
 
 ### Service middleware and error shape are shared on purpose
 
@@ -156,24 +142,27 @@ Main and BIDS both add:
 - service-specific rate limiting middleware
 - a global exception handler returning `vna_common.responses.ErrorResponse`
 
-Follow those patterns instead of inventing per-route response/error envelopes.
+Follow those patterns instead of inventing per-route response or error envelopes.
 
-### The two services use different runtime assumptions
+### Tests rely heavily on dependency overrides and module-level patching
 
-- `vna-main-server` defaults to SQLite for local/test usage and switches to PostgreSQL in Docker/production.
-- `vna-bids-server` assumes PostgreSQL + filesystem storage and runs Alembic-managed schema plus optional background worker loops.
-- Main-server rate limiting is Redis-backed; BIDS-server rate limiting is in-memory.
+- Main-server tests override `get_session`, disable Redis, and run against SQLite.
+- BIDS-server tests patch the module-level `engine` and `async_session` references used by the app, task service, and webhook manager, then recreate metadata per test.
 
-### Tests rely heavily on dependency overrides
+If you add endpoints, startup behavior, or new long-lived services, keep those fixtures working.
 
-- Main-server tests override `get_session` and use in-memory SQLite.
-- BIDS-server tests patch the session/engine globals and recreate metadata per test.
+### Route prefixes are intentionally uneven
 
-If you add endpoints or startup behavior, keep those fixtures working instead of bypassing them.
+- Main-server routes live under `/api/v1/...`.
+- BIDS resource routes live mostly under `/api/...`.
+- BIDS also exposes `/api/v1/internal/status` for cross-service health checks.
+- The replication router is mounted at `/replication`, not `/api/replication`.
+
+Do not normalize these prefixes unless the change is deliberate and coordinated across callers.
 
 ### Frontend data access assumes Vite proxying
 
-Frontend hooks use `@/` imports and fetch relative paths, not environment-specific absolute URLs. Keep main-server calls under `/api/v1` and BIDS file/content calls under `/bids-api` so local Vite proxying and the containerized deployment stay aligned.
+Frontend code uses `@/` imports and relative fetch paths, not environment-specific absolute URLs. Keep main-server calls under `/api/v1` and BIDS file/content calls under `/bids-api` so local Vite proxying and containerized deployment stay aligned.
 
 ## Relevant MCP server
 

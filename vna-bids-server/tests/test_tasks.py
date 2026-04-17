@@ -146,6 +146,15 @@ class TestWebhookDurability:
 
     async def test_due_retry_delivery_is_sent(self, db_session, monkeypatch):
         monkeypatch.setattr(httpx, "AsyncClient", _SuccessAsyncClient)
+        db_session.add(
+            Webhook(
+                webhook_id="whk-1",
+                url="http://example.test/hook",
+                events=["resource.created"],
+                secret="secret",
+            )
+        )
+        await db_session.flush()
         delivery = WebhookDelivery(
             webhook_id="whk-1",
             target_url="http://example.test/hook",
@@ -167,6 +176,14 @@ class TestWebhookDurability:
 
     async def test_future_retry_delivery_is_skipped(self, db_session, monkeypatch):
         monkeypatch.setattr(httpx, "AsyncClient", _SuccessAsyncClient)
+        db_session.add(
+            Webhook(
+                webhook_id="whk-1",
+                url="http://example.test/hook",
+                events=["resource.created"],
+            )
+        )
+        await db_session.flush()
         delivery = WebhookDelivery(
             webhook_id="whk-1",
             target_url="http://example.test/hook",

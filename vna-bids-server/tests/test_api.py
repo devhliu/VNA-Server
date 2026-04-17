@@ -55,7 +55,9 @@ class TestSubjectsAPI:
         await client.post("/api/subjects", json={"subject_id": "sub-004"})
         resp = await client.get("/api/subjects")
         assert resp.status_code == 200
-        assert len(resp.json()) >= 2
+        data = resp.json()
+        assert data["total"] >= 2
+        assert len(data["items"]) >= 2
 
     async def test_update_subject(self, client):
         await client.post("/api/subjects", json={"subject_id": "sub-005"})
@@ -92,7 +94,9 @@ class TestSessionsAPI:
         })
         resp = await client.get("/api/sessions?subject_id=sub-011")
         assert resp.status_code == 200
-        assert len(resp.json()) == 1
+        data = resp.json()
+        assert data["total"] == 1
+        assert len(data["items"]) == 1
 
 
 @pytest.mark.asyncio
@@ -161,6 +165,18 @@ class TestStoreAPI:
         resp = await client.post(f"/api/store/{upload_id}/complete")
         assert resp.status_code == 200
         assert resp.json()["resource_id"].startswith("res-")
+
+    async def test_chunked_upload_respects_requested_chunk_size(self, client):
+        resp = await client.post("/api/store/init", json={
+            "file_name": "large_file.nii.gz",
+            "file_size": 100,
+            "modality": "anat",
+            "chunk_size": 50,
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["chunk_size"] == 50
+        assert data["total_chunks"] == 2
 
 
 @pytest.mark.asyncio

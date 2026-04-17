@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict
+from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from vna_main.models.database import get_session
@@ -36,14 +37,18 @@ def _serialize(p) -> dict:
             "hospital_id": p["hospital_id"],
             "source": p["source"],
             "external_system": p.get("external_system"),
+            "resource_count": p.get("resource_count", 0),
             "created_at": p.get("created_at"),
             "updated_at": p.get("updated_at"),
         }
+    state = sa_inspect(p)
+    resource_count = 0 if "resources" in state.unloaded else len(p.resources or [])
     return {
         "patient_ref": p.patient_ref,
         "hospital_id": p.hospital_id,
         "source": p.source,
         "external_system": p.external_system,
+        "resource_count": resource_count,
         "created_at": p.created_at.isoformat() if p.created_at else None,
         "updated_at": p.updated_at.isoformat() if p.updated_at else None,
     }
@@ -56,6 +61,7 @@ def _serialize_detail(p) -> dict:
             "hospital_id": p["hospital_id"],
             "source": p["source"],
             "external_system": p.get("external_system"),
+            "resource_count": p.get("resource_count", 0),
             "created_at": p.get("created_at"),
             "updated_at": p.get("updated_at"),
             "resources": p.get("resources", []),

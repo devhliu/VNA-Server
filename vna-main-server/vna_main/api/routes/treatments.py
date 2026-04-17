@@ -151,6 +151,7 @@ async def delete_treatment(
     event = await svc.get_treatment(event_id)
     if event is None:
         raise HTTPException(404, "Treatment event not found")
+    event_data = event if isinstance(event, dict) else svc._serialize(event)
     
     ok = await svc.delete_treatment(event_id)
     if not ok:
@@ -161,8 +162,11 @@ async def delete_treatment(
     await audit_svc.log(
         action="delete",
         resource_type="treatment",
-        resource_id=str(event.id),
-        details={"event_type": event.event_type, "patient_ref": event.patient_ref}
+        resource_id=str(event_data["id"]),
+        details={
+            "event_type": event_data["event_type"],
+            "patient_ref": event_data["patient_ref"],
+        }
     )
 
 

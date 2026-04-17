@@ -122,7 +122,7 @@ async def get_metadata(
         base = bids_path.rsplit(".", 1)[0]
         json_path = f"{base}.json"
 
-    if storage.file_exists(json_path):
+    if await storage.file_exists(json_path):
         data = await storage.read_file(json_path)
         return Response(content=data, media_type="application/json")
 

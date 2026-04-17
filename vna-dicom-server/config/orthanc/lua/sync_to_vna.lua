@@ -12,7 +12,7 @@ local VNA_API_KEY = os.getenv("VNA_API_KEY") or ""
 local ORTHANC_USER = os.getenv("DICOM_SERVER_USER") or ""
 local ORTHANC_PASSWORD = os.getenv("DICOM_SERVER_PASSWORD") or ""
 
-local SYNC_ENDPOINT = "/v1/sync/events/dicom"
+local SYNC_ENDPOINT = "/api/v1/internal/sync/dicom"
 local MAX_RETRIES = 3
 local RETRY_DELAY_SECONDS = 2
 
@@ -33,7 +33,7 @@ end
 local function http_post_with_retry(url, payload_json, max_retries, retry_delay)
     local headers = {
         ["Content-Type"] = "application/json",
-        ["X-API-Key"] = VNA_API_KEY,
+        ["Authorization"] = "Bearer " .. VNA_API_KEY,
     }
 
     for attempt = 1, max_retries do
@@ -82,18 +82,35 @@ function OnStableInstance(modality, instanceId, tags, metadata)
     end
 
     -- Build the sync event payload
+    local study_orthanc_id = ""
+    local study_lookup_ok, study_lookup_result = pcall(function()
+        return RestApiGet("/instances/" .. instanceId)
+    end)
+    if study_lookup_ok then
+        local parse_ok, instance_info = pcall(ParseJson, study_lookup_result)
+        if parse_ok and type(instance_info) == "table" then
+            study_orthanc_id = instance_info["ParentStudy"] or ""
+        end
+    end
+
     local payload = {
-        source = "orthanc",
-        instance_id = instanceId,
-        modality = modality_tag,
+        event_type = "study_stable",
+        resource_type = "study",
+        orthanc_id = study_orthanc_id,
         patient_id = patient_id,
         patient_name = patient_name,
         study_uid = study_uid,
-        series_uid = series_uid,
         study_description = study_description,
-        study_date = study_date,
-        accession_number = accession_number,
+        modalities = {modality_tag},
+        series_count = 0,
+        instance_count = 1,
+        timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
     }
+
+    if study_orthanc_id == "" then
+        log_warning("Could not resolve parent study Orthanc ID for instance: " .. instanceId .. ", skipping sync")
+        return
+    end
 
     local json_payload = WriteJson(payload)
 

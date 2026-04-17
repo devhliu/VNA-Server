@@ -99,6 +99,26 @@ class TestCLIUpload:
         assert data["resource_id"] == "res-01"
 
     @patch("bids_sdk.cli.BidsClient")
+    def test_upload_without_session(self, mock_client_cls, runner, tmp_file):
+        mock_client = MagicMock()
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_client_cls.return_value = mock_client
+        from bids_sdk.models import Resource
+        mock_client.upload.return_value = Resource(resource_id="res-01")
+
+        result = runner.invoke(cli, [
+            "upload", str(tmp_file),
+            "--subject", "sub-01",
+            "--modality", "anat",
+            "--server", "http://localhost:8080",
+            "--json",
+        ])
+        assert result.exit_code == 0
+        mock_client.upload.assert_called_once()
+        assert mock_client.upload.call_args.args[2] is None
+
+    @patch("bids_sdk.cli.BidsClient")
     def test_upload_with_labels(self, mock_client_cls, runner, tmp_file):
         mock_client = MagicMock()
         mock_client.__enter__ = MagicMock(return_value=mock_client)

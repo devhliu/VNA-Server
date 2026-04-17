@@ -38,7 +38,10 @@ with DicomClient("http://localhost:8042", username="orthanc", password="orthanc"
         print(f"Series: {s.series_instance_uid}, Description: {s.series_description}")
 
     # Query instances
-    instances = client.query_instances(series_uid="1.2.3.4.5.1")
+    instances = client.query_instances(
+        study_uid="1.2.3.4.5",
+        series_uid="1.2.3.4.5.1",
+    )
     print(f"Found {len(instances)} instances")
 
     # Batch store multiple files
@@ -111,6 +114,7 @@ async def main():
     watcher = ChangeWatcher(
         dicom_client=client,
         vna_server_url="http://localhost:8000",
+        api_key="your-vna-api-key",
         poll_interval=5.0,
     )
     await watcher.start()  # Runs forever
@@ -127,6 +131,7 @@ client = DicomClient("http://localhost:8042")
 watcher = SyncWatcher(
     dicom_client=client,
     vna_server_url="http://localhost:8000",
+    api_key="your-vna-api-key",
     poll_interval=5.0,
 )
 watcher.start()  # Runs forever (blocking)
@@ -162,7 +167,7 @@ dicom-cli delete 1.2.3.4.5 --server http://localhost:8042 --yes
 # List modalities
 dicom-cli modalities --server http://localhost:8042
 
-# JSON output (available for all commands)
+# JSON output (supported by store, query, info, stats, and modalities)
 dicom-cli stats --server http://localhost:8042 --json
 
 # Authentication
