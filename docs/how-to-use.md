@@ -735,7 +735,7 @@ from bids_sdk.client import BidsClient
 
 client = BidsClient(
     base_url="http://localhost:18080",
-    api_key="your-bids-api-key",
+    api_key=os.environ["BIDS_API_KEY"],
 )
 
 # Upload a file
@@ -764,7 +764,7 @@ from bids_sdk.client_async import AsyncBidsClient
 
 async with AsyncBidsClient(
     base_url="http://localhost:18080",
-    api_key="your-bids-api-key",
+    api_key=os.environ["BIDS_API_KEY"],
 ) as client:
     resources = await client.query(modality=["pet"])
     for r in resources:
@@ -929,16 +929,16 @@ docker compose up -d postgres redis
 # Main Server
 cd vna-main-server
 pip install -r requirements.txt
-export VNA_API_KEY=dev-key REQUIRE_AUTH=false
-export DATABASE_URL="postgresql+asyncpg://vna-admin:password@localhost:18432/vna_main"
+export VNA_API_KEY=$VNA_API_KEY REQUIRE_AUTH=false
+export DATABASE_URL="postgresql+asyncpg://$POSTGRES_USER:$POSTGRES_PASSWORD@localhost:$POSTGRES_PORT/vna_main"
 uvicorn vna_main.main:app --host 0.0.0.0 --port 8000 --reload
 
 # BIDS Server (separate terminal)
 cd vna-bids-server
 pip install -r requirements.txt
 pip install -e ../vna-common
-export BIDS_API_KEY=dev-key REQUIRE_AUTH=false
-export DATABASE_URL="postgresql+asyncpg://vna-admin:password@localhost:18432/bidsserver"
+export BIDS_API_KEY=$BIDS_API_KEY REQUIRE_AUTH=false
+export DATABASE_URL="postgresql+asyncpg://$POSTGRES_USER:$POSTGRES_PASSWORD@localhost:$POSTGRES_PORT/bidsserver"
 uvicorn bids_server.main:app --host 0.0.0.0 --port 8080 --reload
 ```
 

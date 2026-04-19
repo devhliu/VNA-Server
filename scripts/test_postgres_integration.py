@@ -9,8 +9,8 @@ import time
 ORTHANC_URL = os.environ.get("ORTHANC_URL", "http://localhost:8042")
 POSTGRES_HOST = os.environ.get("POSTGRES_HOST", "localhost")
 POSTGRES_PORT = os.environ.get("POSTGRES_PORT", "5432")
-POSTGRES_USER = os.environ.get("POSTGRES_USER", "vna")
-POSTGRES_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "vna")
+POSTGRES_USER = os.environ.get("POSTGRES_USER", "")
+POSTGRES_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "")
 POSTGRES_DB = os.environ.get("POSTGRES_DB", "orthanc")
 
 

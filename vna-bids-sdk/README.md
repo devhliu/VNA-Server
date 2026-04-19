@@ -33,7 +33,7 @@ pip install -e ".[dev]"
 from bids_sdk import BidsClient
 
 # Initialize client
-client = BidsClient(base_url="http://localhost:8080", api_key="optional-key")
+client = BidsClient(base_url="http://localhost:8080", api_key=os.environ.get("BIDS_API_KEY"))
 
 # Upload a file (`session_id` is optional)
 resource = client.upload(

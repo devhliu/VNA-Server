@@ -76,7 +76,7 @@ Orthanc 使用 PostgreSQL 作为索引数据库（DICOM 文件仍存储在本地
 | Host | postgres | PostgreSQL 服务地址 |
 | Port | 5432 | PostgreSQL 端口 |
 | Database | orthanc | 数据库名 |
-| Username | vna | 数据库用户 |
+| Username | `${POSTGRES_USER}` (see .env) | 数据库用户 |
 | Lock | false | 支持多 Orthanc 实例 |
 | EnableSsl | false | 不使用 SSL |
 
@@ -108,8 +108,8 @@ dicom-server:
     ORTHANC__POSTGRESQL__HOST: "postgres"
     ORTHANC__POSTGRESQL__PORT: "5432"
     ORTHANC__POSTGRESQL__DATABASE: "orthanc"
-    ORTHANC__POSTGRESQL__USERNAME: "vna"
-    ORTHANC__POSTGRESQL__PASSWORD: "vna"
+    ORTHANC__POSTGRESQL__USERNAME: "${POSTGRES_USER}"
+    ORTHANC__POSTGRESQL__PASSWORD: "${POSTGRES_PASSWORD}"
     ORTHANC__POSTGRESQL__LOCK: "false"
     OHIF_PLUGIN_ENABLED: "true"
     ORTHANC__OHIF__DATASOURCE: "dicom-web"
@@ -130,10 +130,10 @@ dicom-server:
 docker compose up -d --build
 ```
 
-默认凭据:
+默认凭据 (通过 .env 文件配置):
 
-- 用户名: `orthanc`
-- 密码: `orthanc`
+- 用户名: `${DICOM_SERVER_USER}`
+- 密码: `${DICOM_SERVER_PASSWORD}`
 
 ## 与 VNA 集成
 

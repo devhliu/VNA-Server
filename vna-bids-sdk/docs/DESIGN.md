@@ -35,7 +35,7 @@ from bids_sdk import BidsClient, AsyncBidsClient
 client = BidsClient(
     base_url="http://bids-server:8080",
     timeout=30.0,
-    api_key="optional-api-key",
+    api_key=os.environ.get("BIDS_API_KEY"),
     headers={"X-Custom": "value"},
     verify_ssl=True,
 )
@@ -190,7 +190,7 @@ wh = client.create_webhook(
     "https://example.com/hooks/bids",
     events=["upload", "delete"],
     name="My Hook",
-    secret="my-secret",
+    secret=os.environ.get("WEBHOOK_SECRET"),
 )
 
 # List webhooks
@@ -354,7 +354,7 @@ asyncio.run(main())
 ```python
 client = BidsClient(
     base_url="http://localhost:8080",
-    api_key="your-api-key",
+    api_key=os.environ.get("BIDS_API_KEY"),
     headers={"X-Request-ID": "abc123"},
     verify_ssl=True,
 )

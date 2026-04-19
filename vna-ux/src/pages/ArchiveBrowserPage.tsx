@@ -4,7 +4,7 @@ import { ChevronRight, Folder, Search, LayoutGrid, Table, Database, Plus, Play }
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { GalleryView } from '@/components/gallery/GalleryView'
+import { GalleryView, type GalleryItem } from '@/components/gallery/GalleryView'
 
 interface ArchiveItem {
   id: string
@@ -47,8 +47,9 @@ export default function ArchiveBrowserPage() {
     return items.filter(item => item.name.toLowerCase().includes(q))
   }, [items, search]) as ArchiveItem[]
 
-  const handleItemDoubleClick = useCallback((item: ArchiveItem) => {
-    if (item.has_children) {
+  const handleItemDoubleClick = useCallback((item: GalleryItem) => {
+    const archiveItem = item as any as ArchiveItem
+    if (archiveItem.has_children) {
       setSelectedId(item.id)
     }
   }, [])

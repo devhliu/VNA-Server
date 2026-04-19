@@ -51,15 +51,15 @@ docker compose up -d postgres redis
 # Main server
 cd vna-main-server
 pip install -e ../vna-common && pip install -r requirements.txt
-export VNA_API_KEY=dev-key REQUIRE_AUTH=false
-export DATABASE_URL="postgresql+asyncpg://vna-admin:password@localhost:18432/vna_main"
+export VNA_API_KEY=$VNA_API_KEY REQUIRE_AUTH=false
+export DATABASE_URL="postgresql+asyncpg://$POSTGRES_USER:$POSTGRES_PASSWORD@localhost:$POSTGRES_PORT/vna_main"
 uvicorn vna_main.main:app --host 0.0.0.0 --port 8000 --reload
 
 # BIDS server
 cd vna-bids-server
 pip install -e ../vna-common && pip install -r requirements.txt
-export BIDS_API_KEY=dev-key REQUIRE_AUTH=false
-export DATABASE_URL="postgresql+asyncpg://vna-admin:password@localhost:18432/bidsserver"
+export BIDS_API_KEY=$BIDS_API_KEY REQUIRE_AUTH=false
+export DATABASE_URL="postgresql+asyncpg://$POSTGRES_USER:$POSTGRES_PASSWORD@localhost:$POSTGRES_PORT/bidsserver"
 uvicorn bids_server.main:app --host 0.0.0.0 --port 8080 --reload
 ```
 

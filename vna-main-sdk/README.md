@@ -16,7 +16,7 @@ pip install -e ".[dev]"
 from vna_main_sdk import VnaClient
 
 # Connect to the VNA server
-client = VnaClient(base_url="http://localhost:8000", api_key="your-key")
+client = VnaClient(base_url="http://localhost:8000", api_key=os.environ["VNA_API_KEY"])
 
 # Health check
 status = client.health()
@@ -126,7 +126,7 @@ Set environment variables to avoid repeating flags:
 
 ```bash
 export VNA_BASE_URL=http://localhost:8000
-export VNA_API_KEY=your-api-key
+export VNA_API_KEY=$VNA_API_KEY
 ```
 
 ## Features

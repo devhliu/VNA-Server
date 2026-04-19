@@ -216,7 +216,7 @@ When a resource exists in both DICOM and BIDS (e.g., a converted NIfTI from DICO
 ```bash
 pip install -e ../vna-common
 pip install -r requirements.txt -r requirements-dev.txt
-export VNA_API_KEY=dev-key REQUIRE_AUTH=false
+export VNA_API_KEY=$VNA_API_KEY REQUIRE_AUTH=false
 uvicorn vna_main.main:app --reload
 ```
 

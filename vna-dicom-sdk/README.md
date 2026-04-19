@@ -22,7 +22,7 @@ pip install httpx click pydantic
 from dicom_sdk import DicomClient
 
 # Connect to an Orthanc server
-with DicomClient("http://localhost:8042", username="orthanc", password="orthanc") as client:
+with DicomClient("http://localhost:8042", username=os.environ["DICOM_SERVER_USER"], password=os.environ["DICOM_SERVER_PASSWORD"]) as client:
     # Store a DICOM file
     result = client.store("chest_ct.dcm")
     print(f"Stored: {result.sop_instance_uid}")
@@ -114,7 +114,7 @@ async def main():
     watcher = ChangeWatcher(
         dicom_client=client,
         vna_server_url="http://localhost:8000",
-        api_key="your-vna-api-key",
+        api_key=os.environ["VNA_API_KEY"],
         poll_interval=5.0,
     )
     await watcher.start()  # Runs forever
@@ -131,7 +131,7 @@ client = DicomClient("http://localhost:8042")
 watcher = SyncWatcher(
     dicom_client=client,
     vna_server_url="http://localhost:8000",
-    api_key="your-vna-api-key",
+    api_key=os.environ["VNA_API_KEY"],
     poll_interval=5.0,
 )
 watcher.start()  # Runs forever (blocking)

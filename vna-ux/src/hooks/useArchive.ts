@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { fetchApi } from '@/lib/api'
 
 export interface ArchiveResource {
@@ -23,5 +23,19 @@ export function useArchiveResource(id: string) {
   return useQuery({
     queryKey: ['archive', id],
     queryFn: () => fetchApi<ArchiveResource>(`/api/v1/resources/${id}`),
+  })
+}
+
+export function useUpdateItemTags() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, tags }: { id: string; tags: string[] }) =>
+      fetchApi<void>(`/api/v1/resources/${id}/labels`, {
+        method: 'PATCH',
+        body: JSON.stringify({ labels: tags }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['archive'] })
+    },
   })
 }
